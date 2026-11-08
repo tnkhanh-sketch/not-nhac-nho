@@ -169,6 +169,8 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
   startLineRef.current = startLine
   // ---- Tập câu khó: phát lần lượt các câu 🔥, mỗi câu lặp theo số lần đã chọn ----
   const [hardOn, setHardOn] = useState(false)
+  const [cc, setCcS] = useState(() => { try { return localStorage.getItem('ccOn') === '1' } catch { return false } })
+  const setCc = (v: boolean) => { setCcS(v); try { localStorage.setItem('ccOn', v ? '1' : '0') } catch { /* */ } }
   autoRef.current = !teach && !ab && !hardOn && abPick === 0 && !recOn
   const [mask, setMaskS] = useState(() => { try { return Number(localStorage.getItem('maskLevel')) || 0 } catch { return 0 } })
   const setMask = (m: number) => { setMaskS(m); try { localStorage.setItem('maskLevel', String(m)) } catch { /* */ } }
@@ -355,11 +357,12 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
         </div>
         <div className="learn">
           <div>
-            <Player ref={pl} videoId={song.videoId} onState={setPlaying} onCoverPlay={freeToggle} onReady={() => setRates(pl.current!.rates())} />
+            <Player ref={pl} videoId={song.videoId} cc={cc} onState={setPlaying} onCoverPlay={freeToggle} onReady={() => setRates(pl.current!.rates())} />
             <div className="controls">
               <button onClick={() => skip(-5)}>⏪ 5s</button>
               <button className="primary" onClick={freeToggle}>{playing ? '⏸' : '▶'}</button>
               <button onClick={() => skip(5)}>5s ⏩</button>
+              <button className={cc ? 'on' : ''} onClick={() => setCc(!cc)}>💬 Phụ đề</button>
             </div>
             {timeABRow}
             <div className="controls">
@@ -392,7 +395,7 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
       </div>
       <div className="learn">
         <div>
-          <Player key={beatMode ? 'beat' : 'orig'} ref={pl} videoId={beatMode && song.beatVideoId ? song.beatVideoId : song.videoId} onState={setPlaying} onCoverPlay={toggle} onReady={() => setRates(pl.current!.rates())} />
+          <Player key={beatMode ? 'beat' : 'orig'} cc={cc} ref={pl} videoId={beatMode && song.beatVideoId ? song.beatVideoId : song.videoId} onState={setPlaying} onCoverPlay={toggle} onReady={() => setRates(pl.current!.rates())} />
           {beatMode && song.beatOffset == null && <div className="prompt">
             🎯 Căn bản beat<small>Bấm ▶ trên video. Đúng lúc tới chỗ hát câu 1 thì bấm nút bên dưới.</small>
             <button className="big" style={{ marginTop: 10 }} disabled={!playing} onClick={calibrate}>Câu 1 bắt đầu ở đây!</button>
@@ -420,6 +423,7 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
             <button className="primary" onClick={toggle}>{playing ? '⏸' : '▶'}</button>
             <button onClick={() => { setAb(null); jump(idx + 1) }} disabled={idx >= lines.length - 1}>⏭</button>
             <button className={cur.hard ? 'on' : ''} onClick={toggleHard}>🔥 Câu khó</button>
+            <button className={cc ? 'on' : ''} onClick={() => setCc(!cc)} title="Hiện phụ đề có sẵn trong video">💬 Phụ đề</button>
           </div>
           {canRecord() && (!teach || phase !== 'run') && <div className="rec">
             <button className={recOn ? 'recording' : ''} onClick={record}>{recOn ? '⏹ Đang thu… bấm để dừng' : '🎙️ Thu câu này'}</button>

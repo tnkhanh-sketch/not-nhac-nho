@@ -64,9 +64,9 @@ export default function Mark({ songId }: { songId: string }) {
       </div>
       <div className="learn">
         <div>
-          <Player ref={pl} videoId={song.videoId} start={song.startAt || 0} onState={setPlaying}
+          <Player ref={pl} videoId={song.videoId} cc start={song.startAt || 0} onState={setPlaying}
             onReady={() => setCanSlow(pl.current!.rates().includes(0.75))} />
-          <p className="note">Bấm ▶ cho video chạy. Khi ca sĩ <b>bắt đầu hát</b> câu được tô hồng thì bấm nút to (hoặc phím cách).</p>
+          <p className="note">Bấm ▶ cho video chạy. Khi ca sĩ <b>bắt đầu hát</b> câu được tô hồng thì bấm nút to (hoặc phím cách). Nếu video có phụ đề, chữ sẽ hiện trên video để dễ canh.</p>
           <div className="controls">
             <button className="primary big" style={{ flex: '1 1 100%' }} disabled={!playing || done} onClick={tap}>
               {taps.length < n ? `▶ Bắt đầu câu này (${taps.length + 1}/${n})` : '🏁 Hết bài'}

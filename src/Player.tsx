@@ -11,10 +11,12 @@ interface Props {
   videoId: string; start?: number; onState?: (playing: boolean) => void; onReady?: () => void
   /** Nút ▶ trên lớp che: để trang tự quyết phát từ đâu (vd. đang nghỉ giữa 2 lần lặp) */
   onCoverPlay?: () => void
+  /** Hiện phụ đề có sẵn của video (ưu tiên tiếng Việt) */
+  cc?: boolean
 }
 
 /** YouTube player có lớp phủ: không bấm được sang YouTube, che video khi dừng/hết. */
-export const Player = forwardRef<PlayerApi, Props>(function Player({ videoId, start = 0, onState, onReady, onCoverPlay }, ref) {
+export const Player = forwardRef<PlayerApi, Props>(function Player({ videoId, start = 0, onState, onReady, onCoverPlay, cc = false }, ref) {
   const host = useRef<HTMLDivElement>(null)
   const p = useRef<any>(null)
   const [ready, setReady] = useState(false)
@@ -40,7 +42,7 @@ export const Player = forwardRef<PlayerApi, Props>(function Player({ videoId, st
         videoId, width: '100%', height: '100%',
         // lần thử lại dùng youtube-nocookie (ít bị trình chặn quảng cáo chặn hơn)
         host: tryN % 2 ? 'https://www.youtube-nocookie.com' : 'https://www.youtube.com',
-        playerVars: { playsinline: 1, rel: 0, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3, modestbranding: 1, start: Math.floor(start), origin: location.origin },
+        playerVars: { playsinline: 1, rel: 0, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3, modestbranding: 1, start: Math.floor(start), origin: location.origin, cc_load_policy: cc ? 1 : 0, cc_lang_pref: 'vi', hl: 'vi' },
         events: {
           onReady: () => { if (import.meta.env.DEV) (window as any).__yt = p.current; if (!dead) { clearTimeout(slowT); setReady(true); setSlow(false); cb.current.onReady?.() } },
           onStateChange: (e: any) => {
@@ -54,7 +56,7 @@ export const Player = forwardRef<PlayerApi, Props>(function Player({ videoId, st
       })
     }).catch(() => { if (!dead) setSlow(true) })
     return () => { dead = true; clearTimeout(slowT); try { p.current?.destroy() } catch { /* */ } p.current = null; if (h) h.innerHTML = '' }
-  }, [videoId, tryN])
+  }, [videoId, tryN, cc])
 
   useImperativeHandle(ref, () => ({
     play: () => p.current?.playVideo?.(),
