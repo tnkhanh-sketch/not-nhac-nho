@@ -6,4 +6,6 @@ import './styles.css'
 
 registerSW({ immediate: true })
 startAutoSync()
+// Xin trình duyệt giữ dữ liệu lâu dài (Safari có thể xoá dữ liệu web ít dùng)
+navigator.storage?.persist?.().catch(() => {})
 createRoot(document.getElementById('root')!).render(<App />)

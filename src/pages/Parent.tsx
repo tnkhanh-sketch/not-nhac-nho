@@ -64,7 +64,8 @@ export default function Parent() {
 
   const play = (r: Rec) => {
     playing?.pause()
-    const a = new Audio(URL.createObjectURL(r.blob)); a.play(); setPlaying(a)
+    const url = URL.createObjectURL(r.blob)
+    const a = new Audio(url); a.onended = () => URL.revokeObjectURL(url); a.play(); setPlaying(a)
   }
   const delRec = async (r: Rec) => {
     if (!confirm('Xoá bản thu này?')) return

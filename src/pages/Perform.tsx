@@ -16,10 +16,13 @@ export default function Perform({ songId }: { songId: string }) {
   const [now, setNow] = useState(0)
   const [perfs, setPerfs] = useState<Perf[]>([])
   const [watch, setWatch] = useState<{ id: string; url: string } | null>(null)
+  const watchRef = useRef<string | null>(null); watchRef.current = watch?.url ?? null
   const pl = useRef<PlayerApi>(null)
   const preview = useRef<HTMLVideoElement>(null)
   const rec = useRef<{ stop: () => Promise<Recording> } | null>(null)
   const camRef = useRef<MediaStream | null>(null)
+  const recAt = useRef(0)
+  const [vidStarted, setVidStarted] = useState(false)
 
   const beatReady = !!song?.beatVideoId && song.beatOffset != null
   const off = useBeat && beatReady ? song!.beatOffset! : 0
@@ -32,7 +35,7 @@ export default function Perform({ songId }: { songId: string }) {
     db.songs.get(songId).then(s => { setSong(s); if (s?.beatVideoId && s.beatOffset != null) setUseBeat(true) })
     getLines(songId).then(ls => setRaw(ls.filter(l => l.start != null && l.end != null)))
     loadPerfs()
-    return () => { camRef.current?.getTracks().forEach(t => t.stop()) }
+    return () => { camRef.current?.getTracks().forEach(t => t.stop()); if (watchRef.current) URL.revokeObjectURL(watchRef.current) }
   }, [songId])
   useEffect(() => { if (preview.current && cam) { preview.current.srcObject = cam; preview.current.play().catch(() => {}) } }, [cam])
 
@@ -41,7 +44,9 @@ export default function Perform({ songId }: { songId: string }) {
   useEffect(() => {
     const iv = setInterval(() => {
       const t = pl.current?.time() ?? 0; setNow(t)
-      if (recOnRef.current && t > endAt) stop()
+      const dur = pl.current?.duration() ?? 0
+      const over = t > Math.min(endAt, dur > 0 ? dur - 0.3 : Infinity) || (!!pl.current?.ended() && Date.now() - recAt.current > 2500)
+      if (recOnRef.current && over) stop()
     }, 100)
     return () => clearInterval(iv)
   })
@@ -55,7 +60,7 @@ export default function Perform({ songId }: { songId: string }) {
   }
   const start = async () => {
     if (!cam) return
-    rec.current = startRec(cam, true); setRecOn(true)
+    rec.current = startRec(cam, true); setRecOn(true); recAt.current = Date.now()
     const p = pl.current!
     p.setRate(1); p.seek(Math.max(0, (lines[0]?.start ?? 0) - 4)); p.play()
   }
@@ -64,9 +69,15 @@ export default function Perform({ songId }: { songId: string }) {
     rec.current = null; setRecOn(false); pl.current?.pause()
     const out = await r.stop()
     if (out.blob.size < 2000) return setErr('Chưa quay được, con thử lại nhé')
-    await db.performances.put({ ...meta(), songId, blob: out.blob, mime: out.mime, seconds: Math.round(out.seconds), beat: useBeat && beatReady })
-    await logEvent({ songId, lineId: null, type: 'practice', seconds: Math.round(out.seconds) })
-    loadPerfs()
+    const perf: Perf = { ...meta(), songId, blob: out.blob, mime: out.mime, seconds: Math.round(out.seconds), beat: useBeat && beatReady }
+    try {
+      await db.performances.put(perf)
+      await logEvent({ songId, lineId: null, type: 'practice', seconds: perf.seconds })
+      loadPerfs()
+    } catch {
+      setErr('Máy hết chỗ trống nên chưa lưu được trong app. Bấm "Lưu / Gửi" bên dưới để giữ video này.')
+      setPerfs(ps => [perf, ...ps])
+    }
   }
 
   const view = (p: Perf) => { if (watch) URL.revokeObjectURL(watch.url); setWatch({ id: p.id, url: URL.createObjectURL(p.blob) }) }
@@ -75,6 +86,7 @@ export default function Perform({ songId }: { songId: string }) {
     const file = new File([p.blob], `${song?.title || 'bieu-dien'}-${new Date(p.createdAt).toLocaleDateString('sv')}.${ext}`, { type: p.mime.split(';')[0] })
     if (navigator.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file], title: song?.title }) } catch { /* huỷ */ } return }
     const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = file.name; a.click()
+    setTimeout(() => URL.revokeObjectURL(a.href), 30000)
   }
   const del = async (p: Perf) => {
     if (!confirm('Xoá video biểu diễn này?')) return
@@ -96,7 +108,7 @@ export default function Perform({ songId }: { songId: string }) {
       </div>
       <div className="perform">
         <div className="perform-media">
-          <Player key={useBeat && beatReady ? 'b' : 'o'} ref={pl} videoId={useBeat && beatReady ? song.beatVideoId! : song.videoId} />
+          <Player key={useBeat && beatReady ? 'b' : 'o'} ref={pl} videoId={useBeat && beatReady ? song.beatVideoId! : song.videoId} onState={p => { if (p) setVidStarted(true) }} />
           <div className="cam">
             {cam ? <video ref={preview} playsInline muted /> : <button className="primary big" onClick={openCam}>📷 Bật camera</button>}
             {recOn && <span className="recdot">● REC</span>}
@@ -108,9 +120,10 @@ export default function Perform({ songId }: { songId: string }) {
         </div>
         {err && <div className="err">{err}</div>}
         <div className="controls">
-          {!recOn ? <button className="primary big" disabled={!cam} onClick={start}>🔴 Bắt đầu biểu diễn</button>
+          {!recOn ? <button className="primary big" disabled={!cam || !vidStarted} onClick={start}>🔴 Bắt đầu biểu diễn</button>
             : <button className="big recording" onClick={stop}>⏹ Dừng quay</button>}
         </div>
+        {cam && !vidStarted && <p className="note">Bấm ▶ trên video một lần để nhạc sẵn sàng, rồi bấm "Bắt đầu biểu diễn".</p>}
         {!cam && <p className="note">Đặt máy ở chỗ chắc chắn, bấm "Bật camera", rồi "Bắt đầu biểu diễn". Nhạc sẽ phát từ trước câu đầu 4 giây.</p>}
       </div>
 

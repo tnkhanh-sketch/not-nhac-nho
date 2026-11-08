@@ -4,12 +4,17 @@ import { loadYT, EMBED_BLOCKED } from './yt'
 export interface PlayerApi {
   play(): void; pause(): void; seek(t: number): void; time(): number
   setRate(r: number): void; rates(): number[]; playing(): boolean
+  ended(): boolean; duration(): number
 }
 
-interface Props { videoId: string; start?: number; onState?: (playing: boolean) => void; onReady?: () => void }
+interface Props {
+  videoId: string; start?: number; onState?: (playing: boolean) => void; onReady?: () => void
+  /** Nút ▶ trên lớp che: để trang tự quyết phát từ đâu (vd. đang nghỉ giữa 2 lần lặp) */
+  onCoverPlay?: () => void
+}
 
 /** YouTube player có lớp phủ: không bấm được sang YouTube, che video khi dừng/hết. */
-export const Player = forwardRef<PlayerApi, Props>(function Player({ videoId, start = 0, onState, onReady }, ref) {
+export const Player = forwardRef<PlayerApi, Props>(function Player({ videoId, start = 0, onState, onReady, onCoverPlay }, ref) {
   const host = useRef<HTMLDivElement>(null)
   const p = useRef<any>(null)
   const [ready, setReady] = useState(false)
@@ -51,6 +56,8 @@ export const Player = forwardRef<PlayerApi, Props>(function Player({ videoId, st
     setRate: (r: number) => p.current?.setPlaybackRate?.(r),
     rates: () => p.current?.getAvailablePlaybackRates?.() ?? [1],
     playing: () => { const s = p.current?.getPlayerState?.(); return s === 1 || s === 3 },
+    ended: () => p.current?.getPlayerState?.() === 0,
+    duration: () => p.current?.getDuration?.() ?? 0,
   }), [])
 
   return (
@@ -63,7 +70,7 @@ export const Player = forwardRef<PlayerApi, Props>(function Player({ videoId, st
           {ready && <button className="cover-play small" onClick={() => p.current?.playVideo()}>▶</button>}
         </>
         : playing ? <div className="shield full" />
-        : <div className="cover"><button className="cover-play" onClick={() => p.current?.playVideo()}>▶</button></div>}
+        : <div className="cover"><button className="cover-play" onClick={() => onCoverPlay ? onCoverPlay() : p.current?.playVideo()}>▶</button></div>}
     </div>
   )
 })

@@ -38,6 +38,7 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
   const timer = useRef<number>()
   const waiting = useRef(false)
   const armed = useRef(false)
+  const seekAt = useRef(0) // lúc tua gần nhất (trạng thái 'hết video' cũ còn sót vài nhịp)
   const L = useRef<Line[]>([]); L.current = lines
   const repeatRef = useRef(repeat); repeatRef.current = repeat
   const rateRef = useRef(rate); rateRef.current = rate
@@ -71,14 +72,15 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
   const recRef = useRef<{ stop: () => Promise<Recording> } | null>(null)
   const audio = useRef<HTMLAudioElement | null>(null)
   useEffect(() => {
-    const l = lines[idx]; let url: string | null = null
-    setRecUrl(null)
+    const l = lines[idx]; let dead = false
+    setRecUrl(u => { if (u) URL.revokeObjectURL(u); return null })
     if (!l) return
     db.recordings.where('lineId').equals(l.id).toArray().then(rs => {
+      if (dead) return
       const r = rs.filter(x => !x.deletedAt).sort((a, b) => b.createdAt - a.createdAt)[0]
-      if (r) { url = URL.createObjectURL(r.blob); setRecUrl(url) }
+      if (r) setRecUrl(u => { if (u) URL.revokeObjectURL(u); return URL.createObjectURL(r.blob) })
     })
-    return () => { if (url) URL.revokeObjectURL(url) }
+    return () => { dead = true }
   }, [idx, lines.length])
 
   useEffect(() => {
@@ -106,7 +108,7 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
   const runSeg = (s: Seg, r: number, seek = true) => {
     clearWait(); seg.current = s; repN.current = 0; setRep(0); armed.current = !seek
     const p = pl.current!; p.setRate(r)
-    if (seek) p.seek(s.start)
+    if (seek) { p.seek(s.start); seekAt.current = Date.now() }
     p.play()
   }
 
@@ -119,12 +121,16 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
       if (p.playing() && practice.current.last) practice.current.sec += Math.min(1, (nowMs - practice.current.last) / 1000)
       practice.current.last = nowMs
       const s = seg.current
-      if (!s || waiting.current || !p.playing()) return
+      if (!s || waiting.current) return
+      const ended = p.ended()
+      if (!p.playing() && !ended) return
+      // video ngắn hơn điểm cuối (vd. bản beat ngắn hơn): coi cuối video là điểm cuối
+      const dur = p.duration(), end = dur > 0 ? Math.min(s.end, dur - 0.15) : s.end
       // Sau khi tua, YouTube có thể báo thời gian cũ thêm một nhịp: chỉ đếm khi đã vào trong đoạn
-      if (!armed.current) { if (t >= s.start - 0.3 && t < s.end) armed.current = true; return }
-      if (t < s.end) return
+      if (!armed.current) { if (t >= s.start - 0.3 && t < end) armed.current = true; else if (!ended || Date.now() - seekAt.current < 1500) return }
+      if (t < end && !ended) return
       repN.current++; setRep(repN.current)
-      if (repN.current < s.reps()) { p.pause(); wait(() => { armed.current = false; p.seek(s.start); p.play() }) }
+      if (repN.current < s.reps()) { p.pause(); wait(() => { armed.current = false; seekAt.current = Date.now(); p.seek(s.start); p.play() }) }
       else { seg.current = null; s.onDone() }
     }, 50)
     return () => { clearInterval(id); clearWait() }
@@ -170,18 +176,22 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
     if (next.every(l => l.learned)) { showToast('🏆', 'Con đã thuộc cả bài!'); setPhase('end'); return }
     if (first) showToast('⭐ +1', 'Giỏi quá!')
     const after = next.findIndex((l, j) => j > idx && !l.learned)
-    runStep(after >= 0 ? after : idx + 1 < lines.length ? idx + 1 : 0, 0)
+    runStep(after >= 0 ? after : next.findIndex(l => !l.learned), 0)
   }
 
+  const recLine = useRef<string | null>(null)
   const finishRec = async () => {
     const r = recRef.current; if (!r) return
     recRef.current = null; setRecOn(false)
     const rec = await r.stop()
-    if (rec.blob.size < 500) return showToast('😕', 'Chưa thu được tiếng, con thử lại nhé')
-    const l = lines[idx]
-    await db.recordings.put({ ...meta(), songId, lineId: l.id, blob: rec.blob, mime: rec.mime, seconds: Math.round(rec.seconds) })
-    await logEvent({ songId, lineId: l.id, type: 'record', seconds: Math.round(rec.seconds) })
-    setRecUrl(u => { if (u) URL.revokeObjectURL(u); return URL.createObjectURL(rec.blob) })
+    releaseMic() // tắt micro ngay để iPad không giảm tiếng video
+    const lineId = recLine.current; recLine.current = null
+    if (!lineId || rec.blob.size < 500) return showToast('😕', 'Chưa thu được tiếng, con thử lại nhé')
+    try {
+      await db.recordings.put({ ...meta(), songId, lineId, blob: rec.blob, mime: rec.mime, seconds: Math.round(rec.seconds) })
+      await logEvent({ songId, lineId, type: 'record', seconds: Math.round(rec.seconds) })
+    } catch { return showToast('💾', 'Máy hết chỗ trống, chưa lưu được bản thu') }
+    if (lines[idx]?.id === lineId) setRecUrl(u => { if (u) URL.revokeObjectURL(u); return URL.createObjectURL(rec.blob) })
     showToast('🎙️', 'Thu xong rồi! Bấm "Nghe giọng con" nhé')
   }
   const record = async () => {
@@ -190,7 +200,7 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
     let s: MediaStream
     try { s = await getMic() } catch { return showToast('🎤', 'Chưa mở được micro. Bố cho phép dùng micro nhé') }
     recRef.current = startRec(s); setRecOn(true)
-    const l = lines[idx]; segRange.current = [idx, idx]
+    const l = lines[idx]; segRange.current = [idx, idx]; recLine.current = l.id
     runSeg({ start: l.start!, end: l.end! + 0.3, reps: () => 1, onDone: () => { pl.current?.pause(); finishRec() } }, 1)
   }
   const playRec = () => {
@@ -210,6 +220,7 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
     }, rateRef.current)
   }
   const onLine = (i: number) => {
+    if (recRef.current) return showToast('🎙️', 'Đang thu, bấm dừng trước nhé')
     if (abPick === 1) { setAb([i, i]); setAbPick(2); return }
     if (abPick === 2 && ab) {
       const a = Math.min(ab[0], i), b = Math.max(ab[0], i)
@@ -219,12 +230,14 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
   }
 
   const jump = (i: number) => {
-    if (i < 0 || i >= lines.length) return
+    if (i < 0 || i >= lines.length || recRef.current) return
     if (teach) runStep(i, 0); else startLine(i)
   }
   const toggle = () => {
     const p = pl.current!
+    if (recRef.current) { record(); return }
     if (playing) { if (waiting.current && seg.current) p.seek(seg.current.start); clearWait(); p.pause(); return }
+    if (waiting.current && seg.current) { const s = seg.current; clearWait(); armed.current = false; seekAt.current = Date.now(); p.seek(s.start); p.play(); return }
     if (seg.current) p.play()
     else if (teach) runStep(idx, phase === 'choose' ? 2 : step)
     else if (ab) startAB(ab[0], ab[1])
@@ -232,6 +245,7 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
   }
   // ---- Bản beat ----
   const switchBeat = () => {
+    if (recRef.current) return
     clearWait(); seg.current = null; segRange.current = null; setNow(0); setPlaying(false)
     setBeatMode(b => !b)
   }
@@ -270,7 +284,7 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
       </div>
       <div className="learn">
         <div>
-          <Player key={beatMode ? 'beat' : 'orig'} ref={pl} videoId={beatMode && song.beatVideoId ? song.beatVideoId : song.videoId} onState={setPlaying} onReady={() => setRates(pl.current!.rates())} />
+          <Player key={beatMode ? 'beat' : 'orig'} ref={pl} videoId={beatMode && song.beatVideoId ? song.beatVideoId : song.videoId} onState={setPlaying} onCoverPlay={toggle} onReady={() => setRates(pl.current!.rates())} />
           {beatMode && song.beatOffset == null && <div className="prompt">
             🎯 Căn bản beat<small>Bấm ▶ trên video. Đúng lúc tới chỗ hát câu 1 thì bấm nút bên dưới.</small>
             <button className="big" style={{ marginTop: 10 }} disabled={!playing} onClick={calibrate}>Câu 1 bắt đầu ở đây!</button>

@@ -10,12 +10,13 @@ export interface Stats {
 const prevDay = (d: string) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() - 1); return today(x) }
 
 export async function getStats(): Promise<Stats> {
-  const [songs, lines, events, records] = await Promise.all([
-    db.songs.toArray(), db.lines.toArray(), db.events.toArray(), db.recordings.count(),
+  const [songs, lines, events, recs] = await Promise.all([
+    db.songs.toArray(), db.lines.toArray(), db.events.toArray(), db.recordings.toArray(),
   ])
   const live = new Set(songs.filter(s => !s.deletedAt).map(s => s.id))
   const ls = lines.filter(l => !l.deletedAt && live.has(l.songId))
   const ev = events.filter(e => !e.deletedAt)
+  const records = recs.filter(r => !r.deletedAt && live.has(r.songId)).length
   const stars = ls.filter(l => l.learned).length
   const songsDone = [...live].filter(id => { const x = ls.filter(l => l.songId === id); return x.length > 0 && x.every(l => l.learned) }).length
 
