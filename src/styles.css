@@ -73,6 +73,16 @@ label { display: block; font-weight: 600; margin: 14px 0 6px; }
 .k-next { font-size: 22px; color: var(--mute); margin-top: 8px; }
 button.recording { background: #e53935; color: #fff; }
 @media (max-width: 700px), (orientation: portrait) { .perform-media { grid-template-columns: 1fr; } .k-cur { font-size: 26px; } }
+.tv { position: fixed; inset: 0; background: #12081a; display: flex; flex-direction: column; color: #fff; }
+.tv-video { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 1vh 2vw 0; }
+.tv-video .player { height: 100%; width: auto; max-width: 100%; aspect-ratio: 16/9; border-radius: 1vw; }
+.tv-lyrics { text-align: center; padding: 2vh 3vw 3vh; }
+.tv-cur { font-size: clamp(28px, 5.2vw, 96px); font-weight: 800; line-height: 1.2; }
+.tv-cur .fill { background-image: linear-gradient(90deg, var(--pink) var(--p), #fff var(--p)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.tv-next { font-size: clamp(18px, 3vw, 56px); color: #c9b3d1; margin-top: 1vh; min-height: 1.2em; }
+.tv-ui { position: fixed; top: 0; left: 0; right: 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px; background: linear-gradient(#000a, transparent); transition: opacity .4s; z-index: 10; }
+.tv-ui.hide { opacity: 0; pointer-events: none; }
+.tv-help { color: #ddd; font-size: 14px; }
 .learn { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; align-items: start; }
 .learn .side { position: relative; max-height: calc(100vh - 120px); overflow: auto; }
 /* Laptop/iPad ngang: thu nhỏ video để nút luôn nằm trong màn hình */

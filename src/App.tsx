@@ -7,6 +7,7 @@ import Learn from './pages/Learn'
 import Parent from './pages/Parent'
 import Join from './pages/Join'
 import Perform from './pages/Perform'
+import TV from './pages/TV'
 
 export const go = (h: string) => { location.hash = h }
 
@@ -31,6 +32,7 @@ export default function App() {
     case 'bo': return <Parent />
     case 'join': return <Join raw={id} />
     case 'show': return <Perform key={id} songId={id} />
+    case 'tv': return <TV key={id} songId={id} />
     case 'teach': return <Learn key={'t' + id} songId={id} teach />
     default: return <Home />
   }
