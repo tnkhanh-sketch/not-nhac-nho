@@ -4,6 +4,7 @@ import { canRecord, getMic, releaseMic, startRec, Recording } from '../recorder'
 import { Player, PlayerApi } from '../Player'
 import { go } from '../App'
 import { centerInParent } from '../scroll'
+import { maskLine, MASK_LEVELS } from '../mask'
 
 interface Seg { start: number; end: number; reps: () => number; onDone: () => void }
 const GAP = 1500
@@ -155,6 +156,8 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
 
   // ---- Tập câu khó: phát lần lượt các câu 🔥, mỗi câu lặp theo số lần đã chọn ----
   const [hardOn, setHardOn] = useState(false)
+  const [mask, setMaskS] = useState(() => { try { return Number(localStorage.getItem('maskLevel')) || 0 } catch { return 0 } })
+  const setMask = (m: number) => { setMaskS(m); try { localStorage.setItem('maskLevel', String(m)) } catch { /* */ } }
   const startHard = (from: number) => {
     const ls = L.current
     const i = ls.findIndex((l, j) => j >= from && l.hard)
@@ -419,6 +422,10 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
               {abPick === 0 && ab && <><span className="hint">🔁 Đang lặp câu {ab[0] + 1}{ab[1] > ab[0] ? ` → ${ab[1] + 1}` : ''}</span><button onClick={() => setAb(null)}>✖ Bỏ A-B</button></>}
             </div>
             <div className="controls">
+              <span>🙈 Ẩn chữ</span>
+              {MASK_LEVELS.map((n, m) => <button key={n} className={mask === m ? 'on' : ''} onClick={() => setMask(m)}>{n}</button>)}
+            </div>
+            <div className="controls">
               <span>🔁 Số lần</span>
               {REPEATS.map(r => <button key={r} className={repeat === r ? 'on' : ''} onClick={() => setRepeat(r)}>{r === Infinity ? '∞' : r}</button>)}
               {looping && repTotal > 1 && <span className="hint">Lần {Math.min(rep + 1, repTotal)}{repTotal === Infinity ? '' : '/' + repTotal}</span>}
@@ -437,7 +444,7 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
               <div key={l.id} ref={i === hl ? curRef : undefined} className={'line' + (i === hl ? ' cur' : '') + (inAB ? ' inab' : '') + (abPick ? ' picking' : '')} onClick={() => onLine(i)}>
                 {ab && i === ab[0] && <span className="abtag">A</span>}
                 {ab && abPick === 0 && i === ab[1] && <span className="abtag">B</span>}
-                <span className={i === hl ? 'fill' : ''} style={{ ['--p' as string]: (p * 100).toFixed(1) + '%' }}>{l.text}</span>
+                <span className={i === hl ? 'fill' : ''} style={{ ['--p' as string]: (p * 100).toFixed(1) + '%' }}>{maskLine(l.text, mask, i)}</span>
                 {l.hard && <span className="tag">🔥</span>}
                 {l.learned && <span className="tag">✅</span>}
               </div>

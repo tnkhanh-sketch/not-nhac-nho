@@ -141,3 +141,10 @@ button.recording { background: #e53935; color: #fff; }
   .player, .learn .player { border-radius: 0; overflow: visible; }
 }
 @media (max-width: 600px) { .learn > div > .panel { order: 4; } }
+.quiz h3 { font-size: 24px; margin: 8px 0; }
+.q-prompt { font-size: 24px; font-weight: 700; margin: 10px 0 14px; line-height: 1.4; }
+.q-opts { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.q-opts button { text-align: left; font-size: 20px; padding: 14px 16px; background: #fff; border: 3px solid var(--pink2); }
+.q-opts button.right { background: #d9f7e8; border-color: var(--ok); }
+.q-opts button.wrong { background: #ffe3e3; border-color: #e53935; }
+.q-result { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 14px; font-size: 20px; font-weight: 700; }

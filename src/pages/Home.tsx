@@ -88,6 +88,7 @@ export default function Home() {
                 {timed && <button onClick={() => go('/mark/' + s.id)}>⏱ Chia lại</button>}
                 {timed && <button onClick={() => go('/show/' + s.id)}>🎬 Biểu diễn</button>}
                 {timed && <button onClick={() => go('/tv/' + s.id)}>📺 TV</button>}
+                {total >= 4 && <button onClick={() => go('/quiz/' + s.id)}>🎲 Đố vui</button>}
                 {timed && <button onClick={() => go('/review/' + s.id)}>🔧 Rà soát</button>}
                 <button onClick={() => go('/edit/' + s.id)}>✏️ Sửa</button>
                 <button onClick={() => del(s)}>🗑</button>

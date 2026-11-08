@@ -30,7 +30,8 @@ export const Player = forwardRef<PlayerApi, Props>(function Player({ videoId, st
     const h = host.current
     setReady(false); setSlow(false); setErr('')
     // Quá 10 giây chưa sẵn sàng (mạng chậm, bị chặn quảng cáo...): cho bấm "Thử lại"
-    const slowT = window.setTimeout(() => { if (!dead) setSlow(true) }, 10000)
+    // Lần đầu quá 12 giây: tự tạo lại trình phát 1 lần (host nocookie); sau đó mới hiện "Thử lại"
+    const slowT = window.setTimeout(() => { if (!dead) { if (tryN === 0) setTryN(1); else setSlow(true) } }, 12000)
     loadYT(tryN > 0).then(YT => {
       if (dead || !h) return
       const el = document.createElement('div')
@@ -74,8 +75,9 @@ export const Player = forwardRef<PlayerApi, Props>(function Player({ videoId, st
         : !ready ? <div className="cover"><div className="cover-msg">
           {!slow ? 'Đang tải video…' : <>
             Video tải lâu quá 😕<br />
-            <button className="primary" style={{ marginTop: 12 }} onClick={() => setTryN(n => n + 1)}>🔄 Thử lại</button>
+            <button className="primary" style={{ marginTop: 12 }} onClick={() => tryN >= 2 ? location.reload() : setTryN(n => n + 1)}>🔄 Thử lại</button>
             <div className="note" style={{ color: '#ddd', marginTop: 10, fontSize: 15 }}>Kiểm tra mạng. Nếu máy có chặn quảng cáo (Safari: Cài đặt → Safari → Tiện ích/Chặn nội dung) hãy tắt cho trang này.</div>
+            <div style={{ color: '#aaa', marginTop: 6, fontSize: 12 }}>mã: YT{window.YT?.Player ? 1 : 0} · IF{host.current?.querySelector('iframe') ? 1 : 0} · L{tryN} · {navigator.onLine ? 'on' : 'off'}</div>
           </>}
         </div></div>
         : !started ? <>
