@@ -33,6 +33,7 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
   const repN = useRef(0)
   const timer = useRef<number>()
   const waiting = useRef(false)
+  const armed = useRef(false)
   const L = useRef<Line[]>([]); L.current = lines
   const repeatRef = useRef(repeat); repeatRef.current = repeat
   const rateRef = useRef(rate); rateRef.current = rate
@@ -84,12 +85,22 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
       if (teach) { const f = t.findIndex(l => !l.learned); setIdx(f < 0 ? 0 : f) }
     })
   }, [songId])
-  useEffect(() => { centerInParent(curRef.current) }, [idx])
+  // ---- A-B + câu đang hát theo thời gian video ----
+  const [abPick, setAbPick] = useState<0 | 1 | 2>(0)
+  const [ab, setAb] = useState<[number, number] | null>(null)
+  const segRange = useRef<[number, number] | null>(null)
+  let timeIdx = -1
+  for (let i = 0; i < lines.length; i++) { if (lines[i].start! <= now + 0.05) timeIdx = i; else break }
+  let hl = now > 0 && timeIdx >= 0 ? timeIdx : idx
+  const rg = segRange.current
+  if (rg && now > 0 && (seg.current || waiting.current || teach)) hl = Math.min(Math.max(hl, rg[0]), rg[1])
+  useEffect(() => { centerInParent(curRef.current) }, [hl])
+  useEffect(() => { if (!teach && now > 0 && hl !== idx && lines[hl]) setIdx(hl) }, [hl])
 
   const clearWait = () => { clearTimeout(timer.current); waiting.current = false }
   const wait = (fn: () => void) => { clearWait(); waiting.current = true; timer.current = window.setTimeout(() => { waiting.current = false; fn() }, GAP) }
   const runSeg = (s: Seg, r: number, seek = true) => {
-    clearWait(); seg.current = s; repN.current = 0; setRep(0)
+    clearWait(); seg.current = s; repN.current = 0; setRep(0); armed.current = !seek
     const p = pl.current!; p.setRate(r)
     if (seek) p.seek(s.start)
     p.play()
@@ -104,9 +115,12 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
       if (p.playing() && practice.current.last) practice.current.sec += Math.min(1, (nowMs - practice.current.last) / 1000)
       practice.current.last = nowMs
       const s = seg.current
-      if (!s || waiting.current || !p.playing() || t < s.end) return
+      if (!s || waiting.current || !p.playing()) return
+      // Sau khi tua, YouTube có thể báo thời gian cũ thêm một nhịp: chỉ đếm khi đã vào trong đoạn
+      if (!armed.current) { if (t >= s.start - 0.3 && t < s.end) armed.current = true; return }
+      if (t < s.end) return
       repN.current++; setRep(repN.current)
-      if (repN.current < s.reps()) { p.pause(); wait(() => { p.seek(s.start); p.play() }) }
+      if (repN.current < s.reps()) { p.pause(); wait(() => { armed.current = false; p.seek(s.start); p.play() }) }
       else { seg.current = null; s.onDone() }
     }, 50)
     return () => { clearInterval(id); clearWait() }
@@ -117,7 +131,7 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
   // ---- Chế độ học thường ----
   const startLine = (i: number, seek = true) => {
     const l = L.current[i]; if (!l) return
-    setIdx(i)
+    setIdx(i); segRange.current = [i, i]
     runSeg({
       start: l.start!, end: l.end!, reps: () => repeatRef.current,
       onDone: () => {
@@ -133,7 +147,7 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
     const ls = L.current
     if (s === 3 && i === 0) { setPhase('choose'); return }
     const st = STEPS[s]
-    setIdx(i); setStep(s); setPhase('run')
+    setIdx(i); setStep(s); setPhase('run'); segRange.current = [s === 3 ? i - 1 : i, i]
     runSeg({
       start: s === 3 ? ls[i - 1].start! : ls[i].start!, end: ls[i].end!, reps: () => st.reps,
       onDone: () => {
@@ -172,7 +186,7 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
     let s: MediaStream
     try { s = await getMic() } catch { return showToast('🎤', 'Chưa mở được micro. Bố cho phép dùng micro nhé') }
     recRef.current = startRec(s); setRecOn(true)
-    const l = lines[idx]
+    const l = lines[idx]; segRange.current = [idx, idx]
     runSeg({ start: l.start!, end: l.end! + 0.3, reps: () => 1, onDone: () => { pl.current?.pause(); finishRec() } }, 1)
   }
   const playRec = () => {
@@ -180,6 +194,24 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
     pl.current?.pause(); clearWait(); seg.current = null
     audio.current?.pause()
     audio.current = new Audio(recUrl); audio.current.play()
+  }
+
+  // ---- Lặp A-B: chạm câu A rồi câu B, lặp đoạn A→B theo số lần đã chọn ----
+  const startAB = (a: number, b: number) => {
+    const ls = L.current
+    setIdx(a); segRange.current = [a, b]
+    runSeg({
+      start: ls[a].start!, end: ls[b].end!, reps: () => repeatRef.current,
+      onDone: () => { pl.current?.pause(); showToast('👏', 'Xong đoạn A-B rồi!') },
+    }, rateRef.current)
+  }
+  const onLine = (i: number) => {
+    if (abPick === 1) { setAb([i, i]); setAbPick(2); return }
+    if (abPick === 2 && ab) {
+      const a = Math.min(ab[0], i), b = Math.max(ab[0], i)
+      setAb([a, b]); setAbPick(0); startAB(a, b); return
+    }
+    setAb(null); jump(i)
   }
 
   const jump = (i: number) => {
@@ -191,6 +223,7 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
     if (playing) { if (waiting.current && seg.current) p.seek(seg.current.start); clearWait(); p.pause(); return }
     if (seg.current) p.play()
     else if (teach) runStep(idx, phase === 'choose' ? 2 : step)
+    else if (ab) startAB(ab[0], ab[1])
     else startLine(idx)
   }
   const changeRate = (r: number) => { setRate(r); rateRef.current = r; pl.current?.setRate(r) }
@@ -208,6 +241,8 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
   const cur = lines[idx]
   const showRates = [0.5, 0.75, 1].filter(r => rates.includes(r))
   const st = STEPS[step]
+  const looping = !!seg.current || waiting.current
+  const repTotal = repeat
   return (
     <div className="wrap">
       <div className="bar">
@@ -230,9 +265,9 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
             <button className="big" onClick={() => learned(false)}>😐 Cần tập thêm</button>
           </div>}
           <div className="controls">
-            <button onClick={() => jump(idx - 1)} disabled={idx === 0}>⏮</button>
+            <button onClick={() => { setAb(null); jump(idx - 1) }} disabled={idx === 0}>⏮</button>
             <button className="primary" onClick={toggle}>{playing ? '⏸' : '▶'}</button>
-            <button onClick={() => jump(idx + 1)} disabled={idx >= lines.length - 1}>⏭</button>
+            <button onClick={() => { setAb(null); jump(idx + 1) }} disabled={idx >= lines.length - 1}>⏭</button>
             <button className={cur.hard ? 'on' : ''} onClick={toggleHard}>🔥 Câu khó</button>
           </div>
           {canRecord() && (!teach || phase !== 'run') && <div className="rec">
@@ -240,9 +275,16 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
             {recUrl && !recOn && <button onClick={playRec}>🔈 Nghe giọng con</button>}
           </div>}
           {!teach && <>
+            <div className="controls ab">
+              {abPick === 0 && !ab && <button onClick={() => { setAbPick(1); setAb(null) }}>🅰️➜🅱️ Lặp A-B</button>}
+              {abPick === 1 && <><span className="hint">👆 Chạm câu <b>bắt đầu</b> (A)</span><button onClick={() => setAbPick(0)}>Huỷ</button></>}
+              {abPick === 2 && ab && <><span className="hint">👆 Chạm câu <b>kết thúc</b> (B) — chạm lại câu {ab[0] + 1} nếu chỉ lặp 1 câu</span><button onClick={() => { setAbPick(0); setAb(null) }}>Huỷ</button></>}
+              {abPick === 0 && ab && <><span className="hint">🔁 Đang lặp câu {ab[0] + 1}{ab[1] > ab[0] ? ` → ${ab[1] + 1}` : ''}</span><button onClick={() => setAb(null)}>✖ Bỏ A-B</button></>}
+            </div>
             <div className="controls">
-              <span>🔁</span>
+              <span>🔁 Số lần</span>
               {REPEATS.map(r => <button key={r} className={repeat === r ? 'on' : ''} onClick={() => setRepeat(r)}>{r === Infinity ? '∞' : r}</button>)}
+              {looping && repTotal > 1 && <span className="hint">Lần {Math.min(rep + 1, repTotal)}{repTotal === Infinity ? '' : '/' + repTotal}</span>}
             </div>
             {showRates.length > 1 && <div className="controls">
               <span>🐢</span>
@@ -252,10 +294,13 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
         </div>
         <div className="side lines">
           {lines.map((l, i) => {
-            const p = i === idx ? Math.max(0, Math.min(1, (now - l.start!) / (l.end! - l.start!))) : 0
+            const p = i === hl ? Math.max(0, Math.min(1, (now - l.start!) / (l.end! - l.start!))) : 0
+            const inAB = ab && i >= ab[0] && i <= ab[1]
             return (
-              <div key={l.id} ref={i === idx ? curRef : undefined} className={'line' + (i === idx ? ' cur' : '')} onClick={() => jump(i)}>
-                <span className={i === idx ? 'fill' : ''} style={{ ['--p' as string]: (p * 100).toFixed(1) + '%' }}>{l.text}</span>
+              <div key={l.id} ref={i === hl ? curRef : undefined} className={'line' + (i === hl ? ' cur' : '') + (inAB ? ' inab' : '') + (abPick ? ' picking' : '')} onClick={() => onLine(i)}>
+                {ab && i === ab[0] && <span className="abtag">A</span>}
+                {ab && abPick === 0 && i === ab[1] && <span className="abtag">B</span>}
+                <span className={i === hl ? 'fill' : ''} style={{ ['--p' as string]: (p * 100).toFixed(1) + '%' }}>{l.text}</span>
                 {l.hard && <span className="tag">🔥</span>}
                 {l.learned && <span className="tag">✅</span>}
               </div>
