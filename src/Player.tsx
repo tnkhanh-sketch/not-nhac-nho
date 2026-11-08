@@ -21,20 +21,27 @@ export const Player = forwardRef<PlayerApi, Props>(function Player({ videoId, st
   const [started, setStarted] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [err, setErr] = useState('')
+  const [slow, setSlow] = useState(false)
+  const [tryN, setTryN] = useState(0)
   const cb = useRef({ onState, onReady }); cb.current = { onState, onReady }
 
   useEffect(() => {
     let dead = false
     const h = host.current
-    loadYT().then(YT => {
+    setReady(false); setSlow(false); setErr('')
+    // Quá 10 giây chưa sẵn sàng (mạng chậm, bị chặn quảng cáo...): cho bấm "Thử lại"
+    const slowT = window.setTimeout(() => { if (!dead) setSlow(true) }, 10000)
+    loadYT(tryN > 0).then(YT => {
       if (dead || !h) return
       const el = document.createElement('div')
       h.appendChild(el)
       p.current = new YT.Player(el, {
         videoId, width: '100%', height: '100%',
+        // lần thử lại dùng youtube-nocookie (ít bị trình chặn quảng cáo chặn hơn)
+        host: tryN % 2 ? 'https://www.youtube-nocookie.com' : 'https://www.youtube.com',
         playerVars: { playsinline: 1, rel: 0, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3, modestbranding: 1, start: Math.floor(start), origin: location.origin },
         events: {
-          onReady: () => { if (import.meta.env.DEV) (window as any).__yt = p.current; if (!dead) { setReady(true); cb.current.onReady?.() } },
+          onReady: () => { if (import.meta.env.DEV) (window as any).__yt = p.current; if (!dead) { clearTimeout(slowT); setReady(true); setSlow(false); cb.current.onReady?.() } },
           onStateChange: (e: any) => {
             const s = e.data // -1 chưa chạy, 0 hết, 1 phát, 2 dừng, 3 đệm, 5 sẵn sàng
             if (s === 1) setStarted(true)
@@ -44,9 +51,9 @@ export const Player = forwardRef<PlayerApi, Props>(function Player({ videoId, st
           onError: (e: any) => setErr([100, 101, 150].includes(e.data) ? EMBED_BLOCKED : 'Không phát được video (lỗi ' + e.data + ')'),
         },
       })
-    })
-    return () => { dead = true; try { p.current?.destroy() } catch { /* */ } p.current = null; if (h) h.innerHTML = '' }
-  }, [videoId])
+    }).catch(() => { if (!dead) setSlow(true) })
+    return () => { dead = true; clearTimeout(slowT); try { p.current?.destroy() } catch { /* */ } p.current = null; if (h) h.innerHTML = '' }
+  }, [videoId, tryN])
 
   useImperativeHandle(ref, () => ({
     play: () => p.current?.playVideo?.(),
@@ -64,6 +71,13 @@ export const Player = forwardRef<PlayerApi, Props>(function Player({ videoId, st
     <div className="player">
       <div className="player-host" ref={host} />
       {err ? <div className="cover"><div className="cover-msg">{err}</div></div>
+        : !ready ? <div className="cover"><div className="cover-msg">
+          {!slow ? 'Đang tải video…' : <>
+            Video tải lâu quá 😕<br />
+            <button className="primary" style={{ marginTop: 12 }} onClick={() => setTryN(n => n + 1)}>🔄 Thử lại</button>
+            <div className="note" style={{ color: '#ddd', marginTop: 10, fontSize: 15 }}>Kiểm tra mạng. Nếu máy có chặn quảng cáo (Safari: Cài đặt → Safari → Tiện ích/Chặn nội dung) hãy tắt cho trang này.</div>
+          </>}
+        </div></div>
         : !started ? <>
           {/* Lần đầu: để trống giữa cho con chạm nút phát của video (iOS cần chạm thật) */}
           <div className="shield top" /><div className="shield bottom" />

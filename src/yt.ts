@@ -37,13 +37,15 @@ export async function checkEmbed(id: string): Promise<{ ok: boolean | null; titl
 
 declare global { interface Window { YT: any; onYouTubeIframeAPIReady?: () => void } }
 let apiP: Promise<any> | null = null
-export function loadYT(): Promise<any> {
-  if (apiP) return apiP
-  apiP = new Promise(res => {
-    if (window.YT?.Player) return res(window.YT)
+/** Tải YouTube IFrame API. retry = true: bỏ lần tải cũ (bị chặn/mạng lỗi) và tải lại. */
+export function loadYT(retry = false): Promise<any> {
+  if (window.YT?.Player) return Promise.resolve(window.YT)
+  if (apiP && !retry) return apiP
+  apiP = new Promise((res, rej) => {
     window.onYouTubeIframeAPIReady = () => res(window.YT)
     const s = document.createElement('script')
-    s.src = 'https://www.youtube.com/iframe_api'
+    s.src = 'https://www.youtube.com/iframe_api' + (retry ? '?r=' + Date.now() : '')
+    s.onerror = () => { apiP = null; rej(new Error('yt api')) }
     document.head.appendChild(s)
   })
   return apiP

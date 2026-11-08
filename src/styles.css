@@ -136,3 +136,7 @@ button.recording { background: #e53935; color: #fff; }
 .goal-bar { flex: 1 1 160px; height: 14px; background: var(--pink2); border-radius: 8px; overflow: hidden; }
 .goal-bar i { display: block; height: 100%; background: var(--ok); border-radius: 8px; transition: width .4s; }
 .steps { margin: 0; padding-left: 22px; line-height: 1.6; }
+/* Safari iPhone: iframe trong khung bo góc + overflow:hidden đôi khi hiện đen → bỏ trên màn nhỏ */
+@media (max-width: 600px) {
+  .player, .learn .player { border-radius: 0; overflow: visible; }
+}

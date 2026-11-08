@@ -79,7 +79,10 @@ export default function Home() {
                 {timed ? <>
                   <button className="primary" onClick={() => go('/learn/' + s.id)}>🎤 Học</button>
                   <button className="primary" onClick={() => go('/teach/' + s.id)}>👩‍🏫 Cô giáo</button>
-                </> : <button className="primary" onClick={() => go('/mark/' + s.id)}>⏱ Chia câu</button>}
+                </> : <>
+                  <button className="primary" onClick={() => go('/learn/' + s.id)}>🎤 Nghe & lặp</button>
+                  <button className="primary" onClick={() => go('/mark/' + s.id)}>⏱ Chia câu</button>
+                </>}
               </div>
               <div className="row" style={{ marginTop: 8 }}>
                 {timed && <button onClick={() => go('/mark/' + s.id)}>⏱ Chia lại</button>}

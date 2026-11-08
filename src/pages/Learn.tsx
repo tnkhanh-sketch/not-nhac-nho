@@ -86,6 +86,7 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
   useEffect(() => {
     db.songs.get(songId).then(setSong)
     getLines(songId).then(ls => {
+      setAllText(ls.map(l => l.text))
       const t = ls.filter(l => l.start != null && l.end != null)
       setLines(t)
       if (teach) { const f = t.findIndex(l => !l.learned); setIdx(f < 0 ? 0 : f) }
@@ -270,6 +271,54 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
   const calibrate = () => saveBeat(pl.current!.time() - 0.2 - raw[0].start!)
   const nudgeBeat = (d: number) => saveBeat((song?.beatOffset ?? 0) + d)
 
+  // ---- A-B theo thời gian (không cần chia câu) ----
+  const [allText, setAllText] = useState<string[]>([])
+  const [abT, setAbT] = useState<[number | null, number | null]>([null, null])
+  const fmtT = (t: number | null) => t == null ? '--' : `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`
+  const startTimeAB = (a: number, b: number) => {
+    setAb(null); setHardOn(false); segRange.current = null
+    runSeg({ start: a, end: b, reps: () => repeatRef.current, onDone: () => { pl.current?.pause(); showToast('👏', 'Xong đoạn A-B rồi!') } }, rateRef.current)
+  }
+  const setA = () => {
+    const t = Math.max(0, pl.current!.time() - 0.2)
+    clearWait(); seg.current = null
+    setAbT([t, null]); showToast('🅰️', 'Đã đặt A. Nghe tiếp rồi bấm 🅱️ ở chỗ kết thúc')
+  }
+  const setB = () => {
+    const a = abT[0]; if (a == null) return
+    const b = pl.current!.time()
+    if (b <= a + 0.5) return showToast('⚠️', 'B phải sau A ít nhất nửa giây')
+    setAbT([a, b]); startTimeAB(a, b)
+  }
+  const nudgeAB = (k: 0 | 1, d: number) => {
+    const v = [...abT] as [number | null, number | null]
+    if (v[k] == null) return
+    v[k] = Math.max(0, v[k]! + d)
+    if (v[0] != null && v[1] != null && v[1] <= v[0] + 0.5) return
+    setAbT(v); if (v[0] != null && v[1] != null && seg.current) startTimeAB(v[0], v[1])
+  }
+  const clearAB = () => { setAbT([null, null]); clearWait(); seg.current = null }
+  const skip = (d: number) => { const p = pl.current!; p.seek(p.time() + d); seekAt.current = Date.now(); armed.current = false }
+  const freeToggle = () => {
+    const p = pl.current!
+    if (playing) { if (waiting.current && seg.current) p.seek(seg.current.start); clearWait(); p.pause(); return }
+    if (waiting.current && seg.current) { const s = seg.current; clearWait(); armed.current = false; seekAt.current = Date.now(); p.seek(s.start); p.play(); return }
+    if (seg.current) p.play()
+    else if (abT[0] != null && abT[1] != null) startTimeAB(abT[0], abT[1])
+    else p.play()
+  }
+  const timeABRow = (
+    <div className="controls ab">
+      <button className={abT[0] != null ? 'on' : ''} onClick={setA}>🅰️ Đặt A {abT[0] != null && fmtT(abT[0])}</button>
+      <button className={abT[1] != null ? 'on' : ''} disabled={abT[0] == null} onClick={setB}>🅱️ Đặt B {abT[1] != null && fmtT(abT[1])}</button>
+      {abT[1] != null && <>
+        <span className="hint">A</span><button onClick={() => nudgeAB(0, -0.5)}>−0,5</button><button onClick={() => nudgeAB(0, 0.5)}>+0,5</button>
+        <span className="hint">B</span><button onClick={() => nudgeAB(1, -0.5)}>−0,5</button><button onClick={() => nudgeAB(1, 0.5)}>+0,5</button>
+      </>}
+      {abT[0] != null && <button onClick={clearAB}>✖ Bỏ</button>}
+    </div>
+  )
+
   const changeRate = (r: number) => { setRate(r); rateRef.current = r; pl.current?.setRate(r) }
   const toggleHard = async () => {
     const l = lines[idx]; await patchLine(l.id, { hard: !l.hard })
@@ -277,10 +326,39 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
   }
 
   if (!song) return null
-  if (!lines.length) return (
-    <div className="wrap"><div className="bar"><button onClick={() => go('/')}>← Về</button><h2>{song.title}</h2></div>
-      <p>Bài này chưa chia câu.</p><button className="primary big" onClick={() => go('/mark/' + songId)}>⏱ Chia câu</button></div>
-  )
+  // Chưa chia câu: vẫn nghe, lặp A-B theo thời gian, chọn số lần và tốc độ
+  if (!lines.length) {
+    const rs = [0.5, 0.75, 1].filter(r => rates.includes(r))
+    return (
+      <div className="wrap">
+        <div className="bar">
+          <button onClick={() => go('/')}>← Về</button>
+          <h2>🎤 {song.title}</h2>
+          <button onClick={() => go('/mark/' + songId)}>⏱ Chia câu</button>
+        </div>
+        <div className="learn">
+          <div>
+            <Player ref={pl} videoId={song.videoId} onState={setPlaying} onCoverPlay={freeToggle} onReady={() => setRates(pl.current!.rates())} />
+            <div className="controls">
+              <button onClick={() => skip(-5)}>⏪ 5s</button>
+              <button className="primary" onClick={freeToggle}>{playing ? '⏸' : '▶'}</button>
+              <button onClick={() => skip(5)}>5s ⏩</button>
+            </div>
+            {timeABRow}
+            <div className="controls">
+              <span>🔁 Số lần</span>
+              {REPEATS.map(r => <button key={r} className={repeat === r ? 'on' : ''} onClick={() => setRepeat(r)}>{r === Infinity ? '∞' : r}</button>)}
+              {(!!seg.current || waiting.current) && repeat > 1 && <span className="hint">Lần {Math.min(rep + 1, repeat)}{repeat === Infinity ? '' : '/' + repeat}</span>}
+            </div>
+            {rs.length > 1 && <div className="controls"><span>🐢</span>{rs.map(r => <button key={r} className={rate === r ? 'on' : ''} onClick={() => changeRate(r)}>{r}x</button>)}</div>}
+            <p className="note">Bấm ▶ nghe, tới chỗ muốn tập bấm 🅰️, hết đoạn bấm 🅱️, đoạn đó sẽ tự lặp. Muốn chữ tự tô theo nhạc và chạm câu để lặp: bấm ⏱ Chia câu.</p>
+          </div>
+          <div className="side lines">{allText.map((t, i) => <div key={i} className="line">{t}</div>)}</div>
+        </div>
+        {toast && <div className="toast">{toast.big}{toast.small && <small>{toast.small}</small>}</div>}
+      </div>
+    )
+  }
 
   const cur = lines[idx]
   const showRates = [0.5, 0.75, 1].filter(r => rates.includes(r))
