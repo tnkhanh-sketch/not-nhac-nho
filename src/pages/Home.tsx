@@ -63,6 +63,7 @@ export default function Home() {
               </div>
               <div className="row" style={{ marginTop: 8 }}>
                 {timed && <button onClick={() => go('/mark/' + s.id)}>⏱ Chia lại</button>}
+                {timed && <button onClick={() => go('/show/' + s.id)}>🎬 Biểu diễn</button>}
                 {timed && <button onClick={() => go('/review/' + s.id)}>🔧 Rà soát</button>}
                 <button onClick={() => go('/edit/' + s.id)}>✏️ Sửa</button>
                 <button onClick={() => del(s)}>🗑</button>

@@ -17,8 +17,11 @@ const pickMime = () =>
 
 export interface Recording { blob: Blob; mime: string; seconds: number }
 
-export function startRec(s: MediaStream): { stop: () => Promise<Recording> } {
-  const mime = pickMime()
+const pickVideoMime = () =>
+  ['video/mp4', 'video/webm;codecs=vp8,opus', 'video/webm'].find(m => window.MediaRecorder?.isTypeSupported?.(m)) || ''
+
+export function startRec(s: MediaStream, video = false): { stop: () => Promise<Recording> } {
+  const mime = video ? pickVideoMime() : pickMime()
   const mr = new MediaRecorder(s, mime ? { mimeType: mime } : undefined)
   const chunks: Blob[] = []
   const t0 = Date.now()
@@ -27,7 +30,7 @@ export function startRec(s: MediaStream): { stop: () => Promise<Recording> } {
   return {
     stop: () => new Promise(res => {
       mr.onstop = () => {
-        const type = mr.mimeType || mime || 'audio/webm'
+        const type = mr.mimeType || mime || (video ? 'video/webm' : 'audio/webm')
         res({ blob: new Blob(chunks, { type }), mime: type, seconds: (Date.now() - t0) / 1000 })
       }
       if (mr.state !== 'inactive') mr.stop()

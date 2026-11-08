@@ -36,15 +36,20 @@ export function meta(): Meta {
 export interface Ev extends Meta { songId: string; lineId: string | null; type: 'practice' | 'learned' | 'record'; seconds: number; day: string }
 export interface Rec extends Meta { songId: string; lineId: string; blob: Blob; mime: string; seconds: number }
 
+/** Video biểu diễn (chỉ lưu trên máy, không đồng bộ vì nặng) */
+export interface Perf extends Meta { songId: string; blob: Blob; mime: string; seconds: number; beat: boolean }
+
 class DB extends Dexie {
   songs!: Table<Song, string>
   lines!: Table<Line, string>
   events!: Table<Ev, string>
   recordings!: Table<Rec, string>
+  performances!: Table<Perf, string>
   constructor() {
     super('notnhacnho')
     this.version(1).stores({ songs: 'id, updatedAt', lines: 'id, songId, updatedAt' })
     this.version(2).stores({ events: 'id, songId, day, updatedAt', recordings: 'id, songId, lineId, updatedAt' })
+    this.version(3).stores({ performances: 'id, songId, updatedAt' })
   }
 }
 
