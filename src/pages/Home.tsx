@@ -3,7 +3,8 @@ import { db, Song } from '../db'
 import { thumb } from '../yt'
 import { go } from '../App'
 import { fmtDur, getGoal, getStats, Stats } from '../stats'
-import { getPublisher, publishSong, setPublisher, unpublishSong } from '../market'
+import { importPayload, publishSong, songPayload, unpublishSong } from '../market'
+import { getAccount, inbox, InboxItem, sendSong, takeInbox } from '../account'
 
 interface Item { s: Song; learned: number; total: number; timed: boolean }
 
@@ -11,9 +12,12 @@ export default function Home() {
   const [items, setItems] = useState<Item[] | null>(null)
   const [st, setSt] = useState<Stats>()
   const [help, setHelp] = useState(false)
+  const [mail, setMail] = useState<InboxItem[]>([])
+  const acc = getAccount()
   const goal = getGoal()
   const load = async () => {
     getStats().then(setSt)
+    inbox().then(setMail).catch(() => {})
     const songs = (await db.songs.toArray()).filter(s => !s.deletedAt).sort((a, b) => b.updatedAt - a.updatedAt)
     const all = (await db.lines.toArray()).filter(l => !l.deletedAt)
     setItems(songs.map(s => {
@@ -33,15 +37,30 @@ export default function Home() {
         if (!confirm(`Gỡ bài "${s.title}" khỏi Chợ bài hát?`)) return
         await unpublishSong(s); alert('Đã gỡ khỏi chợ.')
       } else {
-        const name = prompt(`Đăng bài lên Chợ để mọi người học cùng.
-Chỉ đăng tên bài, link YouTube và lời đã chia câu.
-
-Tên người đăng (vd. Bé Na):`, getPublisher() || '')
-        if (name == null) return
-        setPublisher(name.trim()); await publishSong(s, name.trim()); alert('🎉 Đã đăng lên Chợ bài hát!')
+        if (!confirm(`Đăng "${s.title}" lên Chợ bài hát với tên "${acc?.name}"?
+Chỉ đăng tên bài, link YouTube và lời đã chia câu.`)) return
+        await publishSong(s, acc?.name || ''); alert('🎉 Đã đăng lên Chợ bài hát!')
       }
       load()
     } catch (e) { alert('Chưa đăng được: ' + (e as Error).message.slice(0, 120)) }
+  }
+
+  const send = async (s: Song) => {
+    const to = prompt(`Gửi bài "${s.title}" cho bạn.
+Nhập số điện thoại của bạn (bạn cần có tài khoản Nốt Nhạc Nhỏ):`)
+    if (!to) return
+    try {
+      const p = await songPayload(s)
+      if (p.lines.length < 2) return alert('Bài cần chia câu xong trước khi gửi')
+      const who = await sendSong(to, s.title, p); alert(`📨 Đã gửi cho ${who}!`)
+    } catch (e) { alert((e as Error).message) }
+  }
+  const receive = async (m: InboxItem, keep: boolean) => {
+    try {
+      const d = await takeInbox(m.id, keep)
+      if (keep && d) { const sid = await importPayload(d); go('/learn/' + sid); return }
+      load()
+    } catch { alert('Chưa nhận được, thử lại nhé') }
   }
 
   const del = async (s: Song) => {
@@ -59,6 +78,7 @@ Tên người đăng (vd. Bé Na):`, getPublisher() || '')
     <div className="wrap">
       <div className="bar">
         <h1>🎵 Nốt Nhạc Nhỏ</h1>
+        <button onClick={() => go('/me')}>👤 {acc?.name}</button>
         <button onClick={() => go('/cho')}>🛒 Chợ</button>
         <button onClick={() => setHelp(!help)}>❓</button>
         <button onClick={() => go('/bo')}>👨 Bố</button>
@@ -71,6 +91,13 @@ Tên người đăng (vd. Bé Na):`, getPublisher() || '')
         <div className="badges">
           {st.badges.map(b => <span key={b.name} className={'badge' + (b.got ? ' got' : '')} title={b.name}>{b.icon}<small>{b.name}</small></span>)}
         </div>
+      </div>}
+      {mail.length > 0 && <div className="panel">
+        <h3>📬 Có {mail.length} bài được gửi cho con</h3>
+        {mail.map(m => <div key={m.id} className="row" style={{ justifyContent: 'space-between', borderTop: '1px solid #f3dbe6', padding: '8px 0' }}>
+          <span><b>{m.title}</b> · từ {m.from_name}</span>
+          <span className="row"><button className="primary" onClick={() => receive(m, true)}>⬇️ Nhận</button><button onClick={() => receive(m, false)}>Bỏ</button></span>
+        </div>)}
       </div>}
       {st && <div className="goal">
         <span>🎯 Hôm nay: {fmtDur(st.secToday)} / {goal} phút</span>
@@ -109,6 +136,7 @@ Tên người đăng (vd. Bé Na):`, getPublisher() || '')
                 {timed && <button onClick={() => go('/tv/' + s.id)}>📺 TV</button>}
                 {total >= 4 && <button onClick={() => go('/quiz/' + s.id)}>🎲 Đố vui</button>}
                 {timed && <button onClick={() => go('/review/' + s.id)}>🔧 Rà soát</button>}
+                {timed && <button onClick={() => send(s)}>📨 Gửi bạn</button>}
                 {timed && !s.fromMarket && <button className={s.marketAt ? 'on' : ''} onClick={() => share(s)}>{s.marketAt ? '📤 Đã đăng' : '📤 Đăng chợ'}</button>}
                 <button onClick={() => go('/edit/' + s.id)}>✏️ Sửa</button>
                 <button onClick={() => del(s)}>🗑</button>

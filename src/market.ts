@@ -32,11 +32,20 @@ export async function unpublishSong(s: Song) {
 }
 export const listMarket = (q: string): Promise<MarketItem[]> => rpc('nnn_market_list', { q })
 
+/** Gói bài để đăng chợ / gửi bạn */
+export async function songPayload(s: Song) {
+  const lines = (await getLines(s.id)).filter(l => l.start != null && l.end != null).map(l => ({ text: l.text, start: l.start, end: l.end }))
+  return { title: s.title, artist: s.artist, videoId: s.videoId, beatVideoId: s.beatVideoId || '', beatOffset: s.beatOffset ?? null, startAt: s.startAt ?? null, lines }
+}
+
 /** Lấy bài từ chợ về máy (tạo bài mới, giữ nguyên mốc thời gian) */
 export async function importFromMarket(id: string): Promise<string> {
   const d = await rpc('nnn_market_get', { sid: id })
   if (!d) throw new Error('Bài này không còn trên chợ')
-  const s: Song = { ...meta(), videoId: d.videoId, title: d.title, artist: d.artist || '', beatVideoId: d.beatVideoId || null, beatOffset: d.beatOffset ?? null, startAt: d.startAt ?? 0, fromMarket: id } as Song
+  return importPayload(d, id)
+}
+export async function importPayload(d: any, marketId?: string): Promise<string> {
+  const s: Song = { ...meta(), videoId: d.videoId, title: d.title, artist: d.artist || '', beatVideoId: d.beatVideoId || null, beatOffset: d.beatOffset ?? null, startAt: d.startAt ?? 0, ...(marketId ? { fromMarket: marketId } : {}) } as Song
   await db.transaction('rw', db.songs, db.lines, async () => {
     await db.songs.put(s)
     for (const [idx, l] of (d.lines as { text: string; start: number; end: number }[]).entries())

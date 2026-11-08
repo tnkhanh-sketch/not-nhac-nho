@@ -11,6 +11,9 @@ import TV from './pages/TV'
 import Quiz from './pages/Quiz'
 import GetScript from './pages/GetScript'
 import Market from './pages/Market'
+import Login from './pages/Login'
+import Me from './pages/Me'
+import { getAccount } from './account'
 
 export const go = (h: string) => { location.hash = h }
 
@@ -26,7 +29,11 @@ function useHash() {
 
 export default function App() {
   const [page, id] = useHash()
+  const [acc, setAcc] = useState(getAccount())
+  // Bắt buộc đăng nhập (trừ trang nối máy / hướng dẫn nút chép lời)
+  if (!acc && page !== 'join' && page !== 'getscript') return <Login onDone={setAcc} />
   switch (page) {
+    case 'me': return <Me onLogout={() => setAcc(null)} />
     case 'add': return <AddSong key={'a' + (id || '')} importRaw={id} />
     case 'getscript': return <GetScript />
     case 'cho': return <Market />
