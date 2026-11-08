@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { db, Line, Rec, Song } from '../db'
 import { getStats, Stats } from '../stats'
 import { go } from '../App'
+import SyncPanel from './SyncPanel'
 
 const PIN_KEY = 'parentPin'
 const getPin = () => { try { return localStorage.getItem(PIN_KEY) } catch { return null } }
@@ -97,6 +98,7 @@ export default function Parent() {
           </div>
         </div>
       </>}
+      <SyncPanel onSynced={load} />
       {rows.map(r => {
         const learned = r.lines.filter(l => l.learned).length
         const hard = r.lines.filter(l => l.hard)

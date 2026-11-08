@@ -18,7 +18,11 @@ export default function Home() {
       return { s, learned: ls.filter(l => l.learned).length, total: ls.length, timed: ls.length > 0 && ls.every(l => l.start != null && l.end != null) }
     }))
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    addEventListener('nnn-synced', load)
+    return () => removeEventListener('nnn-synced', load)
+  }, [])
 
   const del = async (s: Song) => {
     if (!confirm(`Xoá bài "${s.title}"?`)) return
