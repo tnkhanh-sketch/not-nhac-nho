@@ -152,6 +152,19 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
     }, rateRef.current, seek)
   }
 
+  // ---- Tập câu khó: phát lần lượt các câu 🔥, mỗi câu lặp theo số lần đã chọn ----
+  const [hardOn, setHardOn] = useState(false)
+  const startHard = (from: number) => {
+    const ls = L.current
+    const i = ls.findIndex((l, j) => j >= from && l.hard)
+    if (i < 0) { setHardOn(false); pl.current?.pause(); showToast('💪', 'Tập xong các câu khó rồi!'); return }
+    setHardOn(true); setIdx(i); segRange.current = [i, i]
+    runSeg({
+      start: ls[i].start!, end: ls[i].end!, reps: () => Math.max(2, repeatRef.current),
+      onDone: () => { pl.current?.pause(); wait(() => startHard(i + 1)) },
+    }, rateRef.current)
+  }
+
   // ---- Chế độ cô giáo ----
   const runStep = (i: number, s: number) => {
     const ls = L.current
@@ -226,7 +239,7 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
       const a = Math.min(ab[0], i), b = Math.max(ab[0], i)
       setAb([a, b]); setAbPick(0); startAB(a, b); return
     }
-    setAb(null); jump(i)
+    setAb(null); setHardOn(false); jump(i)
   }
 
   const jump = (i: number) => {
@@ -320,6 +333,9 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
           {!teach && <>
             <div className="controls ab">
               {abPick === 0 && !ab && <button onClick={() => { setAbPick(1); setAb(null) }}>🅰️➜🅱️ Lặp A-B</button>}
+              {abPick === 0 && !ab && (hardOn
+                ? <><span className="hint">🔥 Đang tập câu khó</span><button onClick={() => { setHardOn(false); clearWait(); seg.current = null; pl.current?.pause() }}>✖ Dừng</button></>
+                : lines.some(l => l.hard) && <button onClick={() => startHard(0)}>🔥 Tập câu khó ({lines.filter(l => l.hard).length})</button>)}
               {abPick === 1 && <><span className="hint">👆 Chạm câu <b>bắt đầu</b> (A)</span><button onClick={() => setAbPick(0)}>Huỷ</button></>}
               {abPick === 2 && ab && <><span className="hint">👆 Chạm câu <b>kết thúc</b> (B) — chạm lại câu {ab[0] + 1} nếu chỉ lặp 1 câu</span><button onClick={() => { setAbPick(0); setAb(null) }}>Huỷ</button></>}
               {abPick === 0 && ab && <><span className="hint">🔁 Đang lặp câu {ab[0] + 1}{ab[1] > ab[0] ? ` → ${ab[1] + 1}` : ''}</span><button onClick={() => setAb(null)}>✖ Bỏ A-B</button></>}
