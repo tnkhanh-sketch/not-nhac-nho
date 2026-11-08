@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { db, getLines, patchLine, logEvent, meta, Line, Song } from '../db'
 import { canRecord, getMic, releaseMic, startRec, Recording } from '../recorder'
 import { Player, PlayerApi } from '../Player'
@@ -17,7 +17,11 @@ const STEPS = [
 
 export default function Learn({ songId, teach = false }: { songId: string; teach?: boolean }) {
   const [song, setSong] = useState<Song>()
-  const [lines, setLines] = useState<Line[]>([])
+  const [raw, setLines] = useState<Line[]>([])
+  // Bản beat: dời mốc thời gian các câu theo beatOffset
+  const [beatMode, setBeatMode] = useState(false)
+  const off = beatMode ? (song?.beatOffset ?? 0) : 0
+  const lines = useMemo(() => off ? raw.map(l => ({ ...l, start: l.start! + off, end: l.end! + off })) : raw, [raw, off])
   const [idx, setIdx] = useState(0)
   const [now, setNow] = useState(0)
   const [playing, setPlaying] = useState(false)
@@ -162,7 +166,7 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
     await patchLine(lines[idx].id, { learned: true })
     if (first) await logEvent({ songId, lineId: lines[idx].id, type: 'learned', seconds: 0 })
     const next = lines.map((x, j) => j === idx ? { ...x, learned: true } : x)
-    setLines(next)
+    setLines(rs => rs.map((x, j) => j === idx ? { ...x, learned: true } : x))
     if (next.every(l => l.learned)) { showToast('🏆', 'Con đã thuộc cả bài!'); setPhase('end'); return }
     if (first) showToast('⭐ +1', 'Giỏi quá!')
     const after = next.findIndex((l, j) => j > idx && !l.learned)
@@ -226,6 +230,19 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
     else if (ab) startAB(ab[0], ab[1])
     else startLine(idx)
   }
+  // ---- Bản beat ----
+  const switchBeat = () => {
+    clearWait(); seg.current = null; segRange.current = null; setNow(0); setPlaying(false)
+    setBeatMode(b => !b)
+  }
+  const saveBeat = async (v: number | null) => {
+    const r = v == null ? null : Math.round(v * 10) / 10
+    await db.songs.update(songId, { beatOffset: r, updatedAt: Date.now() })
+    setSong(s => s && { ...s, beatOffset: r })
+  }
+  const calibrate = () => saveBeat(pl.current!.time() - 0.2 - raw[0].start!)
+  const nudgeBeat = (d: number) => saveBeat((song?.beatOffset ?? 0) + d)
+
   const changeRate = (r: number) => { setRate(r); rateRef.current = r; pl.current?.setRate(r) }
   const toggleHard = async () => {
     const l = lines[idx]; await patchLine(l.id, { hard: !l.hard })
@@ -248,11 +265,23 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
       <div className="bar">
         <button onClick={() => go('/')}>← Về</button>
         <h2>{teach ? '👩‍🏫 ' : '🎤 '}{song.title}</h2>
+        {song.beatVideoId && <button className={beatMode ? 'on' : ''} onClick={switchBeat}>{beatMode ? '🎵 Beat' : '🎤 Có lời'}</button>}
         <button onClick={() => go(teach ? '/learn/' + songId : '/teach/' + songId)}>{teach ? '🎤 Học tự do' : '👩‍🏫 Cô giáo'}</button>
       </div>
       <div className="learn">
         <div>
-          <Player ref={pl} videoId={song.videoId} onState={setPlaying} onReady={() => setRates(pl.current!.rates())} />
+          <Player key={beatMode ? 'beat' : 'orig'} ref={pl} videoId={beatMode && song.beatVideoId ? song.beatVideoId : song.videoId} onState={setPlaying} onReady={() => setRates(pl.current!.rates())} />
+          {beatMode && song.beatOffset == null && <div className="prompt">
+            🎯 Căn bản beat<small>Bấm ▶ trên video. Đúng lúc tới chỗ hát câu 1 thì bấm nút bên dưới.</small>
+            <button className="big" style={{ marginTop: 10 }} disabled={!playing} onClick={calibrate}>Câu 1 bắt đầu ở đây!</button>
+          </div>}
+          {beatMode && song.beatOffset != null && <div className="controls">
+            <span className="hint">🎵 Lệch beat</span>
+            <button onClick={() => nudgeBeat(-0.1)}>−0,1s</button>
+            <span className="mono">{song.beatOffset >= 0 ? '+' : ''}{song.beatOffset.toFixed(1)}s</span>
+            <button onClick={() => nudgeBeat(0.1)}>+0,1s</button>
+            <button onClick={() => saveBeat(null)}>Căn lại</button>
+          </div>}
           {teach && <div className="prompt">
             {phase === 'idle' && <>Câu {idx + 1}: sẵn sàng chưa?<small>Bấm "Bắt đầu" để cô giáo dạy nhé</small></>}
             {phase === 'run' && <>{st.title}<small>{st.sub} — lần {Math.min(rep + 1, st.reps)}/{st.reps}</small></>}

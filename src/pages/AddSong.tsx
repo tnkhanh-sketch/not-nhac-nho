@@ -9,6 +9,8 @@ const mk = (text: string, o: Partial<Item> = {}): Item => ({ text, start: null, 
 
 export default function AddSong({ songId }: { songId?: string }) {
   const [link, setLink] = useState('')
+  const [beat, setBeat] = useState('')
+  const [beatOk, setBeatOk] = useState<boolean | null>(null)
   const [title, setTitle] = useState('')
   const [artist, setArtist] = useState('')
   const [lyrics, setLyrics] = useState('')
@@ -23,13 +25,15 @@ export default function AddSong({ songId }: { songId?: string }) {
     ;(async () => {
       const s = await db.songs.get(songId)
       if (!s) return
-      setSong(s); setLink('https://youtu.be/' + s.videoId); setTitle(s.title); setArtist(s.artist)
+      setSong(s); setLink('https://youtu.be/' + s.videoId); setBeat(s.beatVideoId ? 'https://youtu.be/' + s.beatVideoId : ''); setTitle(s.title); setArtist(s.artist)
       const ls = await getLines(songId)
       setItems(ls.map(l => mk(l.text, { id: l.id, start: l.start, end: l.end, hard: l.hard, learned: l.learned })))
     })()
   }, [songId])
 
   const yt = parseYouTube(link)
+  const bt = beat.trim() ? parseYouTube(beat) : null
+  useEffect(() => { setBeatOk(null); if (bt) checkEmbed(bt.id).then(r => setBeatOk(r.ok)) }, [bt?.id])
   useEffect(() => {
     setEmbedOk(null)
     if (!yt) return
@@ -77,12 +81,17 @@ export default function AddSong({ songId }: { songId?: string }) {
     if (!yt) return setErr('Link YouTube chưa đúng')
     if (embedOk === false) return setErr(EMBED_BLOCKED)
     if (!title.trim()) return setErr('Con nhập tên bài nhé')
+    if (beat.trim() && !bt) return setErr('Link bản beat chưa đúng')
+    if (bt && beatOk === false) return setErr('Bản beat: ' + EMBED_BLOCKED)
     const list = (items || []).filter(x => x.text.trim())
     if (!list.length) return setErr('Chưa có câu nào')
     const now = Date.now()
     const s: Song = song
       ? { ...song, videoId: yt.id, title: title.trim(), artist: artist.trim(), updatedAt: now }
       : { ...meta(), videoId: yt.id, title: title.trim(), artist: artist.trim() }
+    const beatId = bt?.id ?? null
+    if (beatId !== (song?.beatVideoId ?? null) || (song && song.videoId !== yt.id)) s.beatOffset = null // đổi video: căn lại beat
+    s.beatVideoId = beatId
     const videoChanged = song && song.videoId !== yt.id
     const old = song ? await getLines(song.id) : []
     const keep = new Set(list.map(x => x.id).filter(Boolean))
@@ -116,6 +125,10 @@ export default function AddSong({ songId }: { songId?: string }) {
       <input value={title} onChange={e => setTitle(e.target.value)} />
       <label>Ca sĩ</label>
       <input value={artist} onChange={e => setArtist(e.target.value)} />
+      <label>Link bản beat / karaoke (không bắt buộc)</label>
+      <input value={beat} onChange={e => setBeat(e.target.value)} placeholder="Tìm trên YouTube: tên bài + beat hoặc karaoke" inputMode="url" />
+      {beat.trim() && !bt && <div className="err">Link bản beat chưa đúng</div>}
+      {beatOk === false && <div className="err">Bản beat: {EMBED_BLOCKED}</div>}
 
       {!items ? <>
         <label>Lời bài hát (mỗi dòng 1 câu)</label>

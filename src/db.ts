@@ -1,7 +1,11 @@
 import Dexie, { Table } from 'dexie'
 
 export interface Meta { id: string; ownerId: string; createdAt: number; updatedAt: number; deletedAt: number | null }
-export interface Song extends Meta { videoId: string; title: string; artist: string }
+export interface Song extends Meta {
+  videoId: string; title: string; artist: string
+  /** Bản beat/karaoke (không bắt buộc); beatOffset = thời điểm trên beat - thời điểm trên bản gốc */
+  beatVideoId?: string | null; beatOffset?: number | null
+}
 export interface Line extends Meta {
   songId: string; idx: number; text: string
   start: number | null; end: number | null; hard: boolean; learned: boolean
