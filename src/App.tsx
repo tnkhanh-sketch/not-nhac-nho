@@ -3,6 +3,7 @@ import Home from './pages/Home'
 import AddSong from './pages/AddSong'
 import Mark from './pages/Mark'
 import Review from './pages/Review'
+import Learn from './pages/Learn'
 
 export const go = (h: string) => { location.hash = h }
 
@@ -23,6 +24,8 @@ export default function App() {
     case 'edit': return <AddSong key={id} songId={id} />
     case 'mark': return <Mark key={id} songId={id} />
     case 'review': return <Review key={id} songId={id} />
+    case 'learn': return <Learn key={'l' + id} songId={id} />
+    case 'teach': return <Learn key={'t' + id} songId={id} teach />
     default: return <Home />
   }
 }
