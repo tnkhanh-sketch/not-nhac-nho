@@ -17,7 +17,7 @@ export default function AddSong({ songId }: { songId?: string }) {
   const [lyrics, setLyrics] = useState('')
   const [hits, setHits] = useState<LyricHit[] | null>(null)
   const [finding, setFinding] = useState(false)
-  const [timedNote, setTimedNote] = useState(false)
+  const [timedNote, setTimedNote] = useState<LyricHit | null>(null)
   const [items, setItems] = useState<Item[] | null>(null)
   const [err, setErr] = useState('')
   const [embedOk, setEmbedOk] = useState<boolean | null>(null)
@@ -65,7 +65,7 @@ export default function AddSong({ songId }: { songId?: string }) {
     if (timed.length >= 3) {
       // có mốc thời gian: chia câu sẵn luôn
       setItems(timed.map(x => mk(x.text, { start: x.start, end: x.end })))
-      setTimedNote(true)
+      setTimedNote(h)
     } else setLyrics(plainLines(h.plain).join(String.fromCharCode(10)))
   }
   const fmtD = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
@@ -171,7 +171,8 @@ export default function AddSong({ songId }: { songId?: string }) {
           <button className="primary big" onClick={splitLyrics}>Tạo câu →</button>
         </div>
       </> : <>
-        {timedNote && <div className="panel" style={{ margin: '8px 0' }}>⏱ Lời này có sẵn mốc thời gian nên đã chia câu xong. Sau khi lưu, ở trang <b>Rà soát</b> bấm ▶ và bấm <b>"🎯 Câu 1 bắt đầu ở đây"</b> để khớp với video.</div>}
+        {timedNote && <div className="panel" style={{ margin: '8px 0' }}>⏱ Lời này có sẵn mốc thời gian (theo bản thu của <b>{timedNote.artist}</b>, dài {fmtD(timedNote.duration)}) nên đã chia câu xong.
+          <br />⚠️ Nếu video là bản khác (hát live, cover, remix…) thì chữ sẽ lệch: sau khi lưu, ở trang <b>Rà soát</b> bấm ▶ rồi bấm <b>📍</b> ở vài câu khi ca sĩ bắt đầu hát, hoặc dùng <b>⏱ Chia lại theo video</b>.</div>}
         <label>Các câu ({items.length}) — ⤵ gộp với câu dưới, ✂ tách tại vị trí con trỏ</label>
         {items.map((x, i) => (
           <div className="edit-line" key={x.key}>

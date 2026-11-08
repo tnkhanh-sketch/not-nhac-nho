@@ -140,3 +140,4 @@ button.recording { background: #e53935; color: #fff; }
 @media (max-width: 600px) {
   .player, .learn .player { border-radius: 0; overflow: visible; }
 }
+@media (max-width: 600px) { .learn > div > .panel { order: 4; } }
