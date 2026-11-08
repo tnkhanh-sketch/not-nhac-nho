@@ -53,10 +53,14 @@ type Kind = 'songs' | 'lines' | 'events' | 'recordings'
 const KINDS: Kind[] = ['songs', 'lines', 'events', 'recordings']
 let running: Promise<{ pushed: number; pulled: number } | null> | null = null
 
-export function syncNow() {
-  if (!running) running = doSync().finally(() => { running = null })
+let runningCode: string | null = null
+export function syncNow(): Promise<{ pushed: number; pulled: number } | null> {
+  // Đang chạy với mã cũ mà vừa đổi mã: đợi xong rồi chạy lại với mã mới
+  if (running && runningCode !== getFamilyCode()) return running.catch(() => null).then(() => syncNow())
+  if (!running) { runningCode = getFamilyCode(); running = doSync().finally(() => { running = null }) }
   return running
 }
+const PULL_OVERLAP = 300 // kéo lùi lại một khoảng để không sót bản ghi commit muộn
 
 async function doSync(): Promise<{ pushed: number; pulled: number } | null> {
   const code = getFamilyCode()
@@ -77,12 +81,16 @@ async function doSync(): Promise<{ pushed: number; pulled: number } | null> {
     }
   }
   for (let i = 0; i < items.length; i += 200) await rpc('nnn_push', { code, items: items.slice(i, i + 200) })
+  const same = () => getFamilyCode() === code
+  if (!same()) return null
   set(LS.push, String(started))
 
   // 2) Kéo về
   let seq = Number(get(LS.seq) || 0), pulled = 0
+  let from = Math.max(0, seq - PULL_OVERLAP)
   for (;;) {
-    const rows: { kind: Kind; id: string; updated_at: number; data: any; seq: number }[] = await rpc('nnn_pull', { code, since: seq })
+    const rows: { kind: Kind; id: string; updated_at: number; data: any; seq: number }[] = await rpc('nnn_pull', { code, since: from })
+    if (!same()) return null
     for (const r of rows) {
       seq = Math.max(seq, r.seq)
       const t = db.table(r.kind)
@@ -95,8 +103,10 @@ async function doSync(): Promise<{ pushed: number; pulled: number } | null> {
       } else await t.put(r.data)
       pulled++
     }
+    if (!same()) return null
     set(LS.seq, String(seq))
     if (rows.length < 2000) break
+    from = seq
   }
   set(LS.at, String(Date.now()))
   if (pulled) window.dispatchEvent(new Event('nnn-synced'))

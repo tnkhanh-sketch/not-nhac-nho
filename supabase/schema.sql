@@ -37,7 +37,10 @@ language plpgsql security definer set search_path = public as $$
 declare f text := nnn_family(code); it jsonb; n int := 0;
 begin
   if length(code) < 16 then raise exception 'bad code'; end if;
+  if jsonb_typeof(items) <> 'array' or jsonb_array_length(items) > 500 then raise exception 'too many items'; end if;
   for it in select * from jsonb_array_elements(items) loop
+    if (it->>'kind') not in ('songs', 'lines', 'events', 'recordings') then raise exception 'bad kind'; end if;
+    if length((it->'data')::text) > 65536 then raise exception 'item too large'; end if;
     insert into records (family, kind, id, updated_at, data, seq)
     values (f, it->>'kind', (it->>'id')::uuid, (it->>'updatedAt')::bigint, it->'data', nextval('records_seq'))
     on conflict (family, kind, id) do update
@@ -57,14 +60,17 @@ language sql security definer set search_path = public as $$
 $$;
 
 create or replace function public.nnn_audio_put(code text, rid uuid, b64 text) returns void
-language sql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public as $$
+begin
+  if length(code) < 16 then raise exception 'bad code'; end if;
+  if length(b64) > 8000000 then raise exception 'audio too large'; end if;
   insert into audio (family, id, data) values (nnn_family(code), rid, b64)
-  on conflict (family, id) do nothing
-$$;
+  on conflict (family, id) do nothing;
+end $$;
 
 create or replace function public.nnn_audio_get(code text, rid uuid) returns text
 language sql security definer set search_path = public as $$
-  select data from audio where family = nnn_family(code) and id = rid
+  select data from audio where family = nnn_family(code) and id = rid and length(code) >= 16
 $$;
 
 grant execute on function public.nnn_push(text, jsonb), public.nnn_pull(text, bigint),
