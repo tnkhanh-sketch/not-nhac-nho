@@ -122,8 +122,18 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
       const nowMs = Date.now()
       if (p.playing() && practice.current.last) practice.current.sec += Math.min(1, (nowMs - practice.current.last) / 1000)
       practice.current.last = nowMs
+      // Video đang chạy mà chưa có đoạn nào được theo dõi (vd. con chạm thẳng vào video để phát):
+      // tự bám vào câu đang hát để lặp đủ số lần đã chọn
+      if (!seg.current && !waiting.current && autoRef.current && p.playing() && Date.now() - seekAt.current > 800) {
+        const ls = L.current
+        let i = ls.findIndex(l => t >= l.start! - 0.3 && t < l.end!)
+        if (i < 0) i = ls.findIndex(l => l.start! > t)
+        if (i >= 0) { startLineRef.current(i, false); armed.current = false }
+      }
       const s = seg.current
       if (!s || waiting.current) return
+      // video nhảy ra xa khỏi đoạn đang lặp (không phải do app tua): bỏ đoạn, để tự bám lại câu mới
+      if (autoRef.current && Date.now() - seekAt.current > 1500 && p.playing() && (t > s.end + 2 || (armed.current && t < s.start - 1.5))) { seg.current = null; return }
       const ended = p.ended()
       if (!p.playing() && !ended) return
       // video ngắn hơn điểm cuối (vd. bản beat ngắn hơn): coi cuối video là điểm cuối
@@ -138,6 +148,8 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
     return () => { clearInterval(id); clearWait() }
   }, [])
 
+  const autoRef = useRef(false)
+  const startLineRef = useRef<(i: number, seek?: boolean) => void>(() => {})
   const pickRate = (r: number) => ratesRef.current.includes(r) ? r : 1
 
   // ---- Chế độ học thường ----
@@ -154,8 +166,10 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
     }, rateRef.current, seek)
   }
 
+  startLineRef.current = startLine
   // ---- Tập câu khó: phát lần lượt các câu 🔥, mỗi câu lặp theo số lần đã chọn ----
   const [hardOn, setHardOn] = useState(false)
+  autoRef.current = !teach && !ab && !hardOn && abPick === 0 && !recOn
   const [mask, setMaskS] = useState(() => { try { return Number(localStorage.getItem('maskLevel')) || 0 } catch { return 0 } })
   const setMask = (m: number) => { setMaskS(m); try { localStorage.setItem('maskLevel', String(m)) } catch { /* */ } }
   const startHard = (from: number) => {
