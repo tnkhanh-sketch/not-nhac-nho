@@ -148,3 +148,4 @@ button.recording { background: #e53935; color: #fff; }
 .q-opts button.right { background: #d9f7e8; border-color: var(--ok); }
 .q-opts button.wrong { background: #ffe3e3; border-color: #e53935; }
 .q-result { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 14px; font-size: 20px; font-weight: 700; }
+.bm { display: inline-block; background: var(--pink); color: #fff; font-weight: 800; padding: 8px 14px; border-radius: 12px; text-decoration: none; cursor: grab; }

@@ -3,12 +3,14 @@ import { db, getLines, meta, Line, Song } from '../db'
 import { parseYouTube, checkEmbed, thumb, EMBED_BLOCKED } from '../yt'
 import { go } from '../App'
 import { findLyrics, parseLrc, plainLines, LyricHit } from '../lyrics'
+import TranscriptPanel from './TranscriptPanel'
+import { alignLyrics, parseTranscript, segsToLines, Timed } from '../transcript'
 
 type Item = Pick<Line, 'text' | 'start' | 'end' | 'hard' | 'learned'> & { id?: string; key: string }
 let k = 0
 const mk = (text: string, o: Partial<Item> = {}): Item => ({ text, start: null, end: null, hard: false, learned: false, key: 'k' + k++, ...o })
 
-export default function AddSong({ songId }: { songId?: string }) {
+export default function AddSong({ songId, importRaw }: { songId?: string; importRaw?: string }) {
   const [link, setLink] = useState('')
   const [beat, setBeat] = useState('')
   const [beatOk, setBeatOk] = useState<boolean | null>(null)
@@ -36,6 +38,38 @@ export default function AddSong({ songId }: { songId?: string }) {
   }, [songId])
 
   const yt = parseYouTube(link)
+
+  // Nhận dữ liệu từ nút "Lấy bản chép lời" trên YouTube: tự điền link, tên, tìm lời và chia câu khớp giờ
+  const [importMsg, setImportMsg] = useState('')
+  useEffect(() => {
+    if (!importRaw?.startsWith('imp=')) return
+    let d: { v: string; title?: string; tr: string }
+    try { d = JSON.parse(decodeURIComponent(importRaw.slice(4))) } catch { setImportMsg('Dữ liệu nhận được bị lỗi, bố thử bấm lại nút nhé.'); return }
+    history.replaceState(null, '', '#/add')
+    setLink('https://youtu.be/' + d.v)
+    if (d.title) setTitle(d.title)
+    const segs = parseTranscript(d.tr || '')
+    if (segs.length < 3) { setImportMsg('Chưa đọc được bản chép lời của video này.'); return }
+    setImportMsg('Đang tìm lời chuẩn để khớp với bản chép lời…')
+    ;(async () => {
+      let best: { lines: Timed[]; matched: number; total: number; who: string } | null = null
+      try {
+        for (const h of (await findLyrics(d.title || '', '')).slice(0, 4)) {
+          const ls = plainLines(h.plain || '')
+          if (ls.length < 4) continue
+          const r = alignLyrics(ls, segs)
+          if (!best || r.matched / ls.length > best.matched / best.total) best = { ...r, total: ls.length, who: h.artist }
+        }
+      } catch { /* không có mạng tới LRCLIB: dùng bản chép lời */ }
+      if (best && best.matched / best.total >= 0.6) {
+        setItems(best.lines.map(x => mk(x.text, { start: x.start, end: x.end })))
+        setImportMsg(`✅ Đã lấy lời chuẩn và chia ${best.total} câu khớp giờ video (khớp chắc ${best.matched} câu). Kiểm tra rồi bấm Lưu bài.`)
+      } else {
+        setItems(segsToLines(segs).map(x => mk(x.text, { start: x.start, end: x.end })))
+        setImportMsg(`✅ Đã chia ${segs.length} câu theo bản chép lời của video. Có thể gộp/tách hoặc sửa chữ cho đúng rồi bấm Lưu bài.`)
+      }
+    })()
+  }, [importRaw])
   const bt = beat.trim() ? parseYouTube(beat) : null
   useEffect(() => { setBeatOk(null); if (bt) checkEmbed(bt.id).then(r => setBeatOk(r.ok)) }, [bt?.id])
   useEffect(() => {
@@ -68,6 +102,7 @@ export default function AddSong({ songId }: { songId?: string }) {
       setTimedNote(h)
     } else setLyrics(plainLines(h.plain).join(String.fromCharCode(10)))
   }
+  const applyTimed = (ls: Timed[]) => { setItems(ls.map(x => mk(x.text, { start: x.start, end: x.end }))); setTimedNote(null) }
   const fmtD = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
   const splitLyrics = () => {
@@ -138,6 +173,8 @@ export default function AddSong({ songId }: { songId?: string }) {
         <button onClick={() => go('/')}>← Về</button>
         <h2>{songId ? 'Sửa bài' : 'Thêm bài mới'}</h2>
       </div>
+      {importMsg && <div className="panel" style={{ fontWeight: 600 }}>{importMsg}</div>}
+      {!songId && !importMsg && <p className="note">💡 Mẹo: dùng nút <a href="#/getscript">📋 Lấy bản chép lời 1 chạm</a> trên YouTube để app tự điền và tự chia câu.</p>}
       <label>Link YouTube</label>
       <input value={link} onChange={e => setLink(e.target.value)} placeholder="Dán link youtube.com hoặc youtu.be" inputMode="url" />
       {link && !yt && <div className="err">Link chưa đúng, con kiểm tra lại nhé</div>}
@@ -170,7 +207,9 @@ export default function AddSong({ songId }: { songId?: string }) {
         <div className="row" style={{ marginTop: 12 }}>
           <button className="primary big" onClick={splitLyrics}>Tạo câu →</button>
         </div>
+        <TranscriptPanel lyrics={plainLines(lyrics)} onApply={applyTimed} />
       </> : <>
+        <TranscriptPanel lyrics={items.map(x => x.text).filter(Boolean)} onApply={applyTimed} />
         {timedNote && <div className="panel" style={{ margin: '8px 0' }}>⏱ Lời này có sẵn mốc thời gian (theo bản thu của <b>{timedNote.artist}</b>, dài {fmtD(timedNote.duration)}) nên đã chia câu xong.
           <br />⚠️ Nếu video là bản khác (hát live, cover, remix…) thì chữ sẽ lệch: sau khi lưu, ở trang <b>Rà soát</b> bấm ▶ rồi bấm <b>📍</b> ở vài câu khi ca sĩ bắt đầu hát, hoặc dùng <b>⏱ Chia lại theo video</b>.</div>}
         <label>Các câu ({items.length}) — ⤵ gộp với câu dưới, ✂ tách tại vị trí con trỏ</label>

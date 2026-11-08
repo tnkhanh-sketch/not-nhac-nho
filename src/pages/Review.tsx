@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { db, getLines, patchLine, Line, Song } from '../db'
 import { Player, PlayerApi } from '../Player'
 import { go } from '../App'
+import TranscriptPanel from './TranscriptPanel'
 
 const r1 = (x: number) => Math.round(x * 10) / 10
 
@@ -107,6 +108,11 @@ export default function Review({ songId }: { songId: string }) {
           </div>
         </div>
         <div className="side">
+          <TranscriptPanel lyrics={lines.map(l => l.text)} onApply={async ts => {
+            const now = Date.now()
+            const next = lines.map((l, i) => ({ ...l, start: ts[i]?.start ?? l.start, end: ts[i]?.end ?? l.end, updatedAt: now }))
+            await db.lines.bulkPut(next); setLines(next); savePins([])
+          }} />
           {lines.map((l, i) => (
             <div className="rev" key={l.id} style={playingIdx === i ? { outline: '3px solid var(--pink)' } : undefined}>
               <div className="t">{i + 1}. {l.text} {pins.includes(i) && '📌'}</div>

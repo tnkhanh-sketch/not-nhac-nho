@@ -9,6 +9,7 @@ import Join from './pages/Join'
 import Perform from './pages/Perform'
 import TV from './pages/TV'
 import Quiz from './pages/Quiz'
+import GetScript from './pages/GetScript'
 
 export const go = (h: string) => { location.hash = h }
 
@@ -25,7 +26,8 @@ function useHash() {
 export default function App() {
   const [page, id] = useHash()
   switch (page) {
-    case 'add': return <AddSong />
+    case 'add': return <AddSong key={'a' + (id || '')} importRaw={id} />
+    case 'getscript': return <GetScript />
     case 'edit': return <AddSong key={id} songId={id} />
     case 'mark': return <Mark key={id} songId={id} />
     case 'review': return <Review key={id} songId={id} />
