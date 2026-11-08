@@ -7,6 +7,8 @@ export interface Song extends Meta {
   beatVideoId?: string | null; beatOffset?: number | null
   /** Mốc ?t= trong link: trang Chia câu phát từ đây */
   startAt?: number
+  /** Đã đăng lên Chợ bài hát lúc nào (null: chưa/đã gỡ); fromMarket: lấy từ bài nào trên chợ */
+  marketAt?: number | null; fromMarket?: string
 }
 export interface Line extends Meta {
   songId: string; idx: number; text: string

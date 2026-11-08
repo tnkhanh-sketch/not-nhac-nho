@@ -26,7 +26,7 @@ export function setFamilyCode(code: string | null) {
   set(LS.code, code); set(LS.push, null); set(LS.seq, null); set(LS.at, null)
 }
 
-async function rpc(fn: string, args: object) {
+export async function rpc(fn: string, args: object) {
   const r = await fetch(`${URL_}/rest/v1/rpc/${fn}`, {
     method: 'POST',
     headers: { apikey: KEY!, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },

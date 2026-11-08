@@ -3,6 +3,7 @@ import { db, Song } from '../db'
 import { thumb } from '../yt'
 import { go } from '../App'
 import { fmtDur, getGoal, getStats, Stats } from '../stats'
+import { getPublisher, publishSong, setPublisher, unpublishSong } from '../market'
 
 interface Item { s: Song; learned: number; total: number; timed: boolean }
 
@@ -26,6 +27,23 @@ export default function Home() {
     return () => removeEventListener('nnn-synced', load)
   }, [])
 
+  const share = async (s: Song) => {
+    try {
+      if (s.marketAt) {
+        if (!confirm(`Gỡ bài "${s.title}" khỏi Chợ bài hát?`)) return
+        await unpublishSong(s); alert('Đã gỡ khỏi chợ.')
+      } else {
+        const name = prompt(`Đăng bài lên Chợ để mọi người học cùng.
+Chỉ đăng tên bài, link YouTube và lời đã chia câu.
+
+Tên người đăng (vd. Bé Na):`, getPublisher() || '')
+        if (name == null) return
+        setPublisher(name.trim()); await publishSong(s, name.trim()); alert('🎉 Đã đăng lên Chợ bài hát!')
+      }
+      load()
+    } catch (e) { alert('Chưa đăng được: ' + (e as Error).message.slice(0, 120)) }
+  }
+
   const del = async (s: Song) => {
     if (!confirm(`Xoá bài "${s.title}"?`)) return
     const now = Date.now()
@@ -41,6 +59,7 @@ export default function Home() {
     <div className="wrap">
       <div className="bar">
         <h1>🎵 Nốt Nhạc Nhỏ</h1>
+        <button onClick={() => go('/cho')}>🛒 Chợ</button>
         <button onClick={() => setHelp(!help)}>❓</button>
         <button onClick={() => go('/bo')}>👨 Bố</button>
         <button className="primary big" onClick={() => go('/add')}>+ Thêm bài</button>
@@ -90,6 +109,7 @@ export default function Home() {
                 {timed && <button onClick={() => go('/tv/' + s.id)}>📺 TV</button>}
                 {total >= 4 && <button onClick={() => go('/quiz/' + s.id)}>🎲 Đố vui</button>}
                 {timed && <button onClick={() => go('/review/' + s.id)}>🔧 Rà soát</button>}
+                {timed && !s.fromMarket && <button className={s.marketAt ? 'on' : ''} onClick={() => share(s)}>{s.marketAt ? '📤 Đã đăng' : '📤 Đăng chợ'}</button>}
                 <button onClick={() => go('/edit/' + s.id)}>✏️ Sửa</button>
                 <button onClick={() => del(s)}>🗑</button>
               </div>
