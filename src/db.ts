@@ -28,13 +28,26 @@ export function meta(): Meta {
   return { id: uuid(), ownerId: ownerId(), createdAt: now, updatedAt: now, deletedAt: null }
 }
 
+/** Nhật ký tập: practice = số giây tập, learned = thuộc 1 câu, record = 1 lần thu âm */
+export interface Ev extends Meta { songId: string; lineId: string | null; type: 'practice' | 'learned' | 'record'; seconds: number; day: string }
+export interface Rec extends Meta { songId: string; lineId: string; blob: Blob; mime: string; seconds: number }
+
 class DB extends Dexie {
   songs!: Table<Song, string>
   lines!: Table<Line, string>
+  events!: Table<Ev, string>
+  recordings!: Table<Rec, string>
   constructor() {
     super('notnhacnho')
     this.version(1).stores({ songs: 'id, updatedAt', lines: 'id, songId, updatedAt' })
+    this.version(2).stores({ events: 'id, songId, day, updatedAt', recordings: 'id, songId, lineId, updatedAt' })
   }
+}
+
+export const today = (d = new Date()) => d.toLocaleDateString('sv') // YYYY-MM-DD theo giờ máy
+
+export async function logEvent(e: Pick<Ev, 'songId' | 'lineId' | 'type' | 'seconds'>) {
+  await db.events.put({ ...meta(), ...e, day: today() })
 }
 export const db = new DB()
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { db, getLines, patchLine, Line, Song } from '../db'
+import { db, getLines, patchLine, logEvent, meta, Line, Song } from '../db'
+import { canRecord, getMic, releaseMic, startRec, Recording } from '../recorder'
 import { Player, PlayerApi } from '../Player'
 import { go } from '../App'
 import { centerInParent } from '../scroll'
@@ -38,6 +39,43 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
   const ratesRef = useRef(rates); ratesRef.current = rates
   const curRef = useRef<HTMLDivElement>(null)
 
+  // ---- Lời khen bật lên ----
+  const [toast, setToast] = useState<{ big: string; small?: string } | null>(null)
+  const toastT = useRef<number>()
+  const showToast = (big: string, small?: string) => {
+    setToast({ big, small }); clearTimeout(toastT.current)
+    toastT.current = window.setTimeout(() => setToast(null), 2200)
+  }
+
+  // ---- Ghi thời gian tập (chỉ tính lúc video đang phát) ----
+  const practice = useRef({ sec: 0, last: 0 })
+  const flush = () => {
+    const s = Math.round(practice.current.sec)
+    if (s >= 1) { practice.current.sec -= s; logEvent({ songId, lineId: null, type: 'practice', seconds: s }) }
+  }
+  useEffect(() => {
+    const iv = setInterval(flush, 15000)
+    const vis = () => { if (document.hidden) flush() }
+    document.addEventListener('visibilitychange', vis)
+    return () => { clearInterval(iv); document.removeEventListener('visibilitychange', vis); flush(); releaseMic(); audio.current?.pause() }
+  }, [])
+
+  // ---- Thu âm ----
+  const [recOn, setRecOn] = useState(false)
+  const [recUrl, setRecUrl] = useState<string | null>(null)
+  const recRef = useRef<{ stop: () => Promise<Recording> } | null>(null)
+  const audio = useRef<HTMLAudioElement | null>(null)
+  useEffect(() => {
+    const l = lines[idx]; let url: string | null = null
+    setRecUrl(null)
+    if (!l) return
+    db.recordings.where('lineId').equals(l.id).toArray().then(rs => {
+      const r = rs.filter(x => !x.deletedAt).sort((a, b) => b.createdAt - a.createdAt)[0]
+      if (r) { url = URL.createObjectURL(r.blob); setRecUrl(url) }
+    })
+    return () => { if (url) URL.revokeObjectURL(url) }
+  }, [idx, lines.length])
+
   useEffect(() => {
     db.songs.get(songId).then(setSong)
     getLines(songId).then(ls => {
@@ -62,6 +100,9 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
     const id = setInterval(() => {
       const p = pl.current; if (!p) return
       const t = p.time(); setNow(t)
+      const nowMs = Date.now()
+      if (p.playing() && practice.current.last) practice.current.sec += Math.min(1, (nowMs - practice.current.last) / 1000)
+      practice.current.last = nowMs
       const s = seg.current
       if (!s || waiting.current || !p.playing() || t < s.end) return
       repN.current++; setRep(repN.current)
@@ -103,9 +144,42 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
   }
   const learned = async (ok: boolean) => {
     if (!ok) return runStep(idx, 2)
+    const first = !lines[idx].learned
     await patchLine(lines[idx].id, { learned: true })
-    setLines(ls => ls.map((x, j) => j === idx ? { ...x, learned: true } : x))
-    if (idx + 1 < lines.length) runStep(idx + 1, 0); else setPhase('end')
+    if (first) await logEvent({ songId, lineId: lines[idx].id, type: 'learned', seconds: 0 })
+    const next = lines.map((x, j) => j === idx ? { ...x, learned: true } : x)
+    setLines(next)
+    if (next.every(l => l.learned)) { showToast('🏆', 'Con đã thuộc cả bài!'); setPhase('end'); return }
+    if (first) showToast('⭐ +1', 'Giỏi quá!')
+    const after = next.findIndex((l, j) => j > idx && !l.learned)
+    runStep(after >= 0 ? after : idx + 1 < lines.length ? idx + 1 : 0, 0)
+  }
+
+  const finishRec = async () => {
+    const r = recRef.current; if (!r) return
+    recRef.current = null; setRecOn(false)
+    const rec = await r.stop()
+    if (rec.blob.size < 500) return showToast('😕', 'Chưa thu được tiếng, con thử lại nhé')
+    const l = lines[idx]
+    await db.recordings.put({ ...meta(), songId, lineId: l.id, blob: rec.blob, mime: rec.mime, seconds: Math.round(rec.seconds) })
+    await logEvent({ songId, lineId: l.id, type: 'record', seconds: Math.round(rec.seconds) })
+    setRecUrl(u => { if (u) URL.revokeObjectURL(u); return URL.createObjectURL(rec.blob) })
+    showToast('🎙️', 'Thu xong rồi! Bấm "Nghe giọng con" nhé')
+  }
+  const record = async () => {
+    if (recRef.current) { pl.current?.pause(); clearWait(); seg.current = null; return finishRec() }
+    audio.current?.pause()
+    let s: MediaStream
+    try { s = await getMic() } catch { return showToast('🎤', 'Chưa mở được micro. Bố cho phép dùng micro nhé') }
+    recRef.current = startRec(s); setRecOn(true)
+    const l = lines[idx]
+    runSeg({ start: l.start!, end: l.end! + 0.3, reps: () => 1, onDone: () => { pl.current?.pause(); finishRec() } }, 1)
+  }
+  const playRec = () => {
+    if (!recUrl) return
+    pl.current?.pause(); clearWait(); seg.current = null
+    audio.current?.pause()
+    audio.current = new Audio(recUrl); audio.current.play()
   }
 
   const jump = (i: number) => {
@@ -161,6 +235,10 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
             <button onClick={() => jump(idx + 1)} disabled={idx >= lines.length - 1}>⏭</button>
             <button className={cur.hard ? 'on' : ''} onClick={toggleHard}>🔥 Câu khó</button>
           </div>
+          {canRecord() && (!teach || phase !== 'run') && <div className="rec">
+            <button className={recOn ? 'recording' : ''} onClick={record}>{recOn ? '⏹ Đang thu… bấm để dừng' : '🎙️ Thu câu này'}</button>
+            {recUrl && !recOn && <button onClick={playRec}>🔈 Nghe giọng con</button>}
+          </div>}
           {!teach && <>
             <div className="controls">
               <span>🔁</span>
@@ -185,6 +263,7 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
           })}
         </div>
       </div>
+      {toast && <div className="toast">{toast.big}{toast.small && <small>{toast.small}</small>}</div>}
     </div>
   )
 }
