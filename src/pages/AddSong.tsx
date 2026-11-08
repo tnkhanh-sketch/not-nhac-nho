@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { db, getLines, meta, Line, Song } from '../db'
 import { parseYouTube, checkEmbed, thumb, EMBED_BLOCKED } from '../yt'
 import { go } from '../App'
+import { findLyrics, parseLrc, plainLines, LyricHit } from '../lyrics'
 
 type Item = Pick<Line, 'text' | 'start' | 'end' | 'hard' | 'learned'> & { id?: string; key: string }
 let k = 0
@@ -14,6 +15,9 @@ export default function AddSong({ songId }: { songId?: string }) {
   const [title, setTitle] = useState('')
   const [artist, setArtist] = useState('')
   const [lyrics, setLyrics] = useState('')
+  const [hits, setHits] = useState<LyricHit[] | null>(null)
+  const [finding, setFinding] = useState(false)
+  const [timedNote, setTimedNote] = useState(false)
   const [items, setItems] = useState<Item[] | null>(null)
   const [err, setErr] = useState('')
   const [embedOk, setEmbedOk] = useState<boolean | null>(null)
@@ -48,6 +52,23 @@ export default function AddSong({ songId }: { songId?: string }) {
     })
     return () => { dead = true }
   }, [yt?.id])
+
+  const autoFind = async () => {
+    if (!title.trim()) return setErr('Cần có tên bài trước (dán link để app tự điền)')
+    setErr(''); setFinding(true); setHits(null)
+    try { setHits(await findLyrics(title, artist)) } catch { setErr('Chưa tìm được, kiểm tra mạng rồi thử lại nhé') }
+    setFinding(false)
+  }
+  const useHit = (h: LyricHit) => {
+    setHits(null)
+    const timed = h.synced ? parseLrc(h.synced) : []
+    if (timed.length >= 3) {
+      // có mốc thời gian: chia câu sẵn luôn
+      setItems(timed.map(x => mk(x.text, { start: x.start, end: x.end })))
+      setTimedNote(true)
+    } else setLyrics(plainLines(h.plain).join(String.fromCharCode(10)))
+  }
+  const fmtD = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
   const splitLyrics = () => {
     const ls = lyrics.split(/\r?\n/).map(s => s.trim()).filter(Boolean)
@@ -133,11 +154,24 @@ export default function AddSong({ songId }: { songId?: string }) {
 
       {!items ? <>
         <label>Lời bài hát (mỗi dòng 1 câu)</label>
+        <div className="row" style={{ marginBottom: 8 }}>
+          <button className="primary" disabled={finding} onClick={autoFind}>{finding ? 'Đang tìm…' : '🔎 Tìm lời tự động'}</button>
+          <span className="note">hoặc dán lời vào ô bên dưới</span>
+        </div>
+        {hits && (hits.length ? <div className="panel" style={{ margin: '0 0 10px' }}>
+          <b>Chọn bài đúng:</b>
+          {hits.map(h => <div key={h.id} className="row" style={{ justifyContent: 'space-between', borderTop: '1px solid #f3dbe6', padding: '8px 0' }}>
+            <span>{h.track} – <i>{h.artist}</i> · {fmtD(h.duration)} {h.synced ? '· ⏱ có mốc giờ' : ''}</span>
+            <button onClick={() => useHit(h)}>Dùng lời này</button>
+          </div>)}
+          <button onClick={() => setHits(null)}>Không có bài đúng</button>
+        </div> : <div className="err">Chưa tìm thấy lời bài này. Con thử sửa tên bài cho đúng rồi tìm lại, hoặc dán lời nhé.</div>)}
         <textarea value={lyrics} onChange={e => setLyrics(e.target.value)} placeholder="Dán lời vào đây..." />
         <div className="row" style={{ marginTop: 12 }}>
           <button className="primary big" onClick={splitLyrics}>Tạo câu →</button>
         </div>
       </> : <>
+        {timedNote && <div className="panel" style={{ margin: '8px 0' }}>⏱ Lời này có sẵn mốc thời gian nên đã chia câu xong. Sau khi lưu, ở trang <b>Rà soát</b> bấm ▶ và bấm <b>"🎯 Câu 1 bắt đầu ở đây"</b> để khớp với video.</div>}
         <label>Các câu ({items.length}) — ⤵ gộp với câu dưới, ✂ tách tại vị trí con trỏ</label>
         {items.map((x, i) => (
           <div className="edit-line" key={x.key}>
