@@ -5,6 +5,8 @@ export interface Song extends Meta {
   videoId: string; title: string; artist: string
   /** Bản beat/karaoke (không bắt buộc); beatOffset = thời điểm trên beat - thời điểm trên bản gốc */
   beatVideoId?: string | null; beatOffset?: number | null
+  /** Mốc ?t= trong link: trang Chia câu phát từ đây */
+  startAt?: number
 }
 export interface Line extends Meta {
   songId: string; idx: number; text: string

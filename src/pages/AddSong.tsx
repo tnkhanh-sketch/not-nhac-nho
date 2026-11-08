@@ -25,7 +25,7 @@ export default function AddSong({ songId }: { songId?: string }) {
     ;(async () => {
       const s = await db.songs.get(songId)
       if (!s) return
-      setSong(s); setLink('https://youtu.be/' + s.videoId); setBeat(s.beatVideoId ? 'https://youtu.be/' + s.beatVideoId : ''); setTitle(s.title); setArtist(s.artist)
+      setSong(s); setLink('https://youtu.be/' + s.videoId + (s.startAt ? '?t=' + s.startAt : '')); setBeat(s.beatVideoId ? 'https://youtu.be/' + s.beatVideoId : ''); setTitle(s.title); setArtist(s.artist)
       const ls = await getLines(songId)
       setItems(ls.map(l => mk(l.text, { id: l.id, start: l.start, end: l.end, hard: l.hard, learned: l.learned })))
     })()
@@ -92,6 +92,7 @@ export default function AddSong({ songId }: { songId?: string }) {
     const beatId = bt?.id ?? null
     if (beatId !== (song?.beatVideoId ?? null) || (song && song.videoId !== yt.id)) s.beatOffset = null // đổi video: căn lại beat
     s.beatVideoId = beatId
+    s.startAt = yt.t || 0
     const videoChanged = song && song.videoId !== yt.id
     const old = song ? await getLines(song.id) : []
     const keep = new Set(list.map(x => x.id).filter(Boolean))

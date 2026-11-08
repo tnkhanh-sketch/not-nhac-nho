@@ -37,13 +37,13 @@ async function rpc(fn: string, args: object) {
   return t ? JSON.parse(t) : null
 }
 
-const toB64 = (b: Blob) => new Promise<string>((res, rej) => {
+export const toB64 = (b: Blob) => new Promise<string>((res, rej) => {
   const fr = new FileReader()
   fr.onload = () => res(String(fr.result).split(',')[1] || '')
   fr.onerror = rej
   fr.readAsDataURL(b)
 })
-const fromB64 = (s: string, type: string) => {
+export const fromB64 = (s: string, type: string) => {
   const bin = atob(s); const a = new Uint8Array(bin.length)
   for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i)
   return new Blob([a], { type })

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { db, Line, Rec, Song } from '../db'
-import { getStats, Stats } from '../stats'
+import { fmtDur, getStats, Stats } from '../stats'
 import { go } from '../App'
 import SyncPanel from './SyncPanel'
+import BackupPanel from './BackupPanel'
 
 const PIN_KEY = 'parentPin'
 const getPin = () => { try { return localStorage.getItem(PIN_KEY) } catch { return null } }
@@ -50,7 +51,7 @@ export default function Parent() {
       const e = ev.filter(x => x.songId === s.id && !x.deletedAt)
       return {
         s, lines: lines.filter(l => l.songId === s.id && !l.deletedAt).sort((a, b) => a.idx - b.idx),
-        minutes: Math.round(e.filter(x => x.type === 'practice').reduce((a, x) => a + x.seconds, 0) / 60),
+        minutes: e.filter(x => x.type === 'practice').reduce((a, x) => a + x.seconds, 0),
         last: e.map(x => x.day).sort().pop() || null,
         recs: recs.filter(r => r.songId === s.id && !r.deletedAt).sort((a, b) => b.createdAt - a.createdAt),
       }
@@ -88,7 +89,7 @@ export default function Parent() {
           <div className="stat"><b>⭐ {st.stars}</b><span>câu đã thuộc</span></div>
           <div className="stat"><b>🏆 {st.songsDone}</b><span>bài thuộc trọn</span></div>
           <div className="stat"><b>🔥 {st.streak}</b><span>ngày liền (kỷ lục {st.bestStreak})</span></div>
-          <div className="stat"><b>⏱️ {st.minutesTotal}</b><span>phút đã tập</span></div>
+          <div className="stat"><b>⏱️ {fmtDur(st.secTotal)}</b><span>đã tập</span></div>
           <div className="stat"><b>🎙️ {st.records}</b><span>lần thu âm</span></div>
         </div>
         <div className="panel">
@@ -99,6 +100,7 @@ export default function Parent() {
         </div>
       </>}
       <SyncPanel onSynced={load} />
+      <BackupPanel onDone={load} />
       {rows.map(r => {
         const learned = r.lines.filter(l => l.learned).length
         const hard = r.lines.filter(l => l.hard)
@@ -109,7 +111,7 @@ export default function Parent() {
               <button onClick={() => setOpen(open === r.s.id ? null : r.s.id)}>{open === r.s.id ? 'Thu gọn' : 'Chi tiết'}</button>
             </div>
             <div className="note">
-              Thuộc {learned}/{r.lines.length} câu · {r.minutes} phút · {r.recs.length} bản thu · Lần tập cuối: {r.last ? fmtDay(r.last) : 'chưa tập'}
+              Thuộc {learned}/{r.lines.length} câu · tập {fmtDur(r.minutes)} · {r.recs.length} bản thu · Lần tập cuối: {r.last ? fmtDay(r.last) : 'chưa tập'}
               {hard.length > 0 && <> · 🔥 {hard.length} câu khó</>}
             </div>
             {open === r.s.id && <div style={{ marginTop: 10 }}>

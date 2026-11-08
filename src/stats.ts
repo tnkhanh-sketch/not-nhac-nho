@@ -3,7 +3,7 @@ import { db, today } from './db'
 export interface Badge { icon: string; name: string; got: boolean }
 export interface Stats {
   stars: number; songsDone: number; streak: number; bestStreak: number
-  minutesToday: number; minutesTotal: number; records: number
+  minutesToday: number; minutesTotal: number; secToday: number; secTotal: number; records: number
   perDay: { day: string; minutes: number }[]; badges: Badge[]
 }
 
@@ -32,7 +32,9 @@ export async function getStats(): Promise<Stats> {
     while (days.has(y)) { n++; const t = new Date(y + 'T12:00:00'); t.setDate(t.getDate() + 1); y = today(t) }
     bestStreak = Math.max(bestStreak, n)
   }
-  const minutesTotal = Math.round([...secByDay.values()].reduce((a, b) => a + b, 0) / 60)
+  const secTotal = [...secByDay.values()].reduce((a, b) => a + b, 0)
+  const minutesTotal = Math.round(secTotal / 60)
+  const secToday = secByDay.get(today()) || 0
   const perDay: Stats['perDay'] = []
   for (let i = 6, x = today(); i >= 0; i--) { perDay.unshift({ day: x, minutes: Math.round((secByDay.get(x) || 0) / 60) }); x = prevDay(x) }
 
@@ -47,5 +49,12 @@ export async function getStats(): Promise<Stats> {
     { icon: '🎙️', name: 'Lần thu đầu tiên', got: records >= 1 },
     { icon: '⏱️', name: 'Tập 60 phút', got: minutesTotal >= 60 },
   ]
-  return { stars, songsDone, streak, bestStreak, minutesToday: Math.round((secByDay.get(today()) || 0) / 60), minutesTotal, records, perDay, badges }
+  return { stars, songsDone, streak, bestStreak, minutesToday: Math.round(secToday / 60), minutesTotal, secToday, secTotal, records, perDay, badges }
+}
+
+/** 45 giây · 3 phút · 1 giờ 20 phút */
+export function fmtDur(sec: number) {
+  if (sec < 60) return `${Math.round(sec)} giây`
+  const m = Math.round(sec / 60)
+  return m < 60 ? `${m} phút` : `${Math.floor(m / 60)} giờ ${m % 60} phút`
 }

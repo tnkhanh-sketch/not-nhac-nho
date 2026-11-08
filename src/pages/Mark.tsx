@@ -64,7 +64,7 @@ export default function Mark({ songId }: { songId: string }) {
       </div>
       <div className="learn">
         <div>
-          <Player ref={pl} videoId={song.videoId} onState={setPlaying}
+          <Player ref={pl} videoId={song.videoId} start={song.startAt || 0} onState={setPlaying}
             onReady={() => setCanSlow(pl.current!.rates().includes(0.75))} />
           <p className="note">Bấm ▶ cho video chạy. Khi ca sĩ <b>bắt đầu hát</b> câu được tô hồng thì bấm nút to (hoặc phím cách).</p>
           <div className="controls">
@@ -75,7 +75,7 @@ export default function Mark({ songId }: { songId: string }) {
             <button onClick={() => playing ? pl.current?.pause() : pl.current?.play()}>{playing ? '⏸' : '▶'}</button>
             {canSlow && <button className={slow ? 'on' : ''} onClick={() => setSlow(!slow)}>🐢 0.75x</button>}
             <button className={react ? 'on' : ''} onClick={() => setReact(!react)}>Trừ 0,2s phản xạ</button>
-            <button onClick={() => { setTaps([]); pl.current?.seek(0) }}>⟲ Làm lại từ đầu</button>
+            <button onClick={() => { setTaps([]); pl.current?.seek(song.startAt || 0) }}>⟲ Làm lại từ đầu</button>
           </div>
         </div>
         <div className="side lines">

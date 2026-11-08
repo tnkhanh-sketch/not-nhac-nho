@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { db, Song } from '../db'
 import { thumb } from '../yt'
 import { go } from '../App'
-import { getStats, Stats } from '../stats'
+import { fmtDur, getStats, Stats } from '../stats'
 
 interface Item { s: Song; learned: number; total: number; timed: boolean }
 
@@ -42,7 +42,7 @@ export default function Home() {
       {st && <div className="stats">
         <div className="stat"><b>⭐ {st.stars}</b><span>câu đã thuộc</span></div>
         <div className="stat"><b>🔥 {st.streak}</b><span>ngày liền</span></div>
-        <div className="stat"><b>⏱️ {st.minutesToday}</b><span>phút hôm nay</span></div>
+        <div className="stat"><b>⏱️ {fmtDur(st.secToday)}</b><span>tập hôm nay</span></div>
         <div className="badges">
           {st.badges.map(b => <span key={b.name} className={'badge' + (b.got ? ' got' : '')} title={b.name}>{b.icon}<small>{b.name}</small></span>)}
         </div>
