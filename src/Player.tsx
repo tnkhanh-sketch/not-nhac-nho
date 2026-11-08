@@ -29,7 +29,7 @@ export const Player = forwardRef<PlayerApi, Props>(function Player({ videoId, st
         videoId, width: '100%', height: '100%',
         playerVars: { playsinline: 1, rel: 0, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3, modestbranding: 1, start: Math.floor(start), origin: location.origin },
         events: {
-          onReady: () => { if (!dead) { setReady(true); cb.current.onReady?.() } },
+          onReady: () => { if (import.meta.env.DEV) (window as any).__yt = p.current; if (!dead) { setReady(true); cb.current.onReady?.() } },
           onStateChange: (e: any) => {
             const s = e.data // -1 chưa chạy, 0 hết, 1 phát, 2 dừng, 3 đệm, 5 sẵn sàng
             if (s === 1) setStarted(true)

@@ -48,7 +48,7 @@ export default function Review({ songId }: { songId: string }) {
         <button className="primary" onClick={() => go('/learn/' + songId)}>Xong → Học bài</button>
       </div>
       <div className="learn">
-        <div><Player ref={pl} videoId={song.videoId} onState={p => { if (!p) stopAt.current = null }} /></div>
+        <div><Player ref={pl} videoId={song.videoId} /></div>
         <div className="side">
           {lines.map((l, i) => (
             <div className="rev" key={l.id} style={playingIdx === i ? { outline: '3px solid var(--pink)' } : undefined}>
