@@ -5,6 +5,7 @@ import { go } from '../App'
 import { fmtDur, getGoal, getStats, Stats } from '../stats'
 import { importPayload, publishSong, songPayload, unpublishSong } from '../market'
 import { getAccount, inbox, InboxItem, sendSong, takeInbox } from '../account'
+import { autoSplit } from '../autosplit'
 
 interface Item { s: Song; learned: number; total: number; timed: boolean }
 
@@ -13,6 +14,7 @@ export default function Home() {
   const [st, setSt] = useState<Stats>()
   const [help, setHelp] = useState(false)
   const [mail, setMail] = useState<InboxItem[]>([])
+  const [autoBusy, setAutoBusy] = useState('')
   const acc = getAccount()
   const goal = getGoal()
   const load = async () => {
@@ -45,6 +47,11 @@ Chỉ đăng tên bài, link YouTube và lời đã chia câu.`)) return
     } catch (e) { alert('Chưa đăng được: ' + (e as Error).message.slice(0, 120)) }
   }
 
+  const auto = async (s: Song) => {
+    setAutoBusy(s.id)
+    try { await autoSplit(s); go('/review/' + s.id) }
+    catch (e) { alert((e as Error).message); setAutoBusy('') }
+  }
   const send = async (s: Song) => {
     const to = prompt(`Gửi bài "${s.title}" cho bạn.
 Nhập số điện thoại của bạn (bạn cần có tài khoản Nốt Nhạc Nhỏ):`)
@@ -136,6 +143,7 @@ Nhập số điện thoại của bạn (bạn cần có tài khoản Nốt Nh�
                 {timed && <button onClick={() => go('/tv/' + s.id)}>📺 TV</button>}
                 {total >= 4 && <button onClick={() => go('/quiz/' + s.id)}>🎲 Đố vui</button>}
                 {timed && <button onClick={() => go('/review/' + s.id)}>🔧 Rà soát</button>}
+                <button disabled={autoBusy === s.id} onClick={() => auto(s)}>{autoBusy === s.id ? '⚡ Đang chia…' : '⚡ Chia tự động'}</button>
                 {timed && <button onClick={() => send(s)}>📨 Gửi bạn</button>}
                 {timed && !s.fromMarket && <button className={s.marketAt ? 'on' : ''} onClick={() => share(s)}>{s.marketAt ? '📤 Đã đăng' : '📤 Đăng chợ'}</button>}
                 <button onClick={() => go('/edit/' + s.id)}>✏️ Sửa</button>

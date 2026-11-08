@@ -3,6 +3,7 @@ import { db, getLines, patchLine, Line, Song } from '../db'
 import { Player, PlayerApi } from '../Player'
 import { go } from '../App'
 import { centerInParent } from '../scroll'
+import { autoSplit } from '../autosplit'
 
 const REACT = 0.2
 
@@ -61,6 +62,7 @@ export default function Mark({ songId }: { songId: string }) {
       <div className="bar">
         <button onClick={() => go('/')}>← Về</button>
         <h2>⏱ Chia câu: {song.title}</h2>
+        <button className="primary" onClick={async () => { try { await autoSplit(song); go('/review/' + songId) } catch (e) { alert((e as Error).message) } }}>⚡ Chia tự động</button>
       </div>
       <div className="learn">
         <div>

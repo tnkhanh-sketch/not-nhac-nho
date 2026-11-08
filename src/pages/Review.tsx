@@ -3,6 +3,7 @@ import { db, getLines, patchLine, Line, Song } from '../db'
 import { Player, PlayerApi } from '../Player'
 import { go } from '../App'
 import TranscriptPanel from './TranscriptPanel'
+import { autoSplit } from '../autosplit'
 
 const r1 = (x: number) => Math.round(x * 10) / 10
 
@@ -46,6 +47,7 @@ export default function Review({ songId }: { songId: string }) {
   const PK = 'pins:' + songId
   const [pins, setPins] = useState<number[]>(() => { try { return JSON.parse(localStorage.getItem(PK) || '[]') } catch { return [] } })
   const [msg, setMsg] = useState('')
+  const [autoNote, setAutoNote] = useState(() => { try { return localStorage.getItem('autoNote:' + songId) || '' } catch { return '' } })
   const savePins = (p: number[]) => { setPins(p); try { localStorage.setItem(PK, JSON.stringify(p)) } catch { /* */ } }
   const pin = async (k: number) => {
     const T = Math.max(0, (pl.current?.time() ?? 0) - 0.2)
@@ -95,10 +97,13 @@ export default function Review({ songId }: { songId: string }) {
         <div>
           <Player ref={pl} videoId={song.videoId} start={song.startAt || 0} onState={setPlayingV} />
           <div className="panel">
+            {autoNote && <div className="prompt" style={{ fontSize: 18, textAlign: 'left' }}>⚡ Đã chia tự động theo bản «{autoNote}».
+              <small>Video có thể là bản khác (live, cover) nên hơi lệch: bấm ▶, khi ca sĩ bắt đầu hát câu 1 bấm "📍 Câu 1 bắt đầu ở đây", rồi ghim 📍 thêm 1–2 câu gần cuối bài là khớp cả bài.</small></div>}
             <b>Cho chữ khớp với video</b>
             <p className="note">Bấm ▶ trên video. Khi ca sĩ <b>bắt đầu hát</b> câu nào thì bấm <b>📍</b> ở câu đó (bên danh sách). Ghim khoảng 4–6 câu rải khắp bài là cả bài khớp. Nếu vẫn lệch nhiều, dùng "⏱ Chia lại theo video".</p>
             <button className="primary big" disabled={!playingV} onClick={() => pin(0)}>📍 Câu 1 bắt đầu ở đây</button>
             {msg && <p className="note" style={{ fontWeight: 600 }}>{msg}</p>}
+            <button onClick={async () => { try { const r = await autoSplit(song); setAutoNote(r.source); setLines(await getLines(songId)); savePins([]); setMsg(`⚡ Đã chia lại tự động (${r.matched}/${r.total} câu khớp chữ).`) } catch (e) { setMsg((e as Error).message) } }}>⚡ Chia tự động lại</button>
             {pins.length > 0 && <button onClick={() => { savePins([]); setMsg('Đã bỏ các ghim.') }}>Bỏ ghim ({pins.length})</button>}
             <p className="note" style={{ marginTop: 10 }}>Dời cả bài:</p>
             <div className="row" style={{ marginTop: 8 }}>
