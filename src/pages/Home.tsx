@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react'
 import { db, Song } from '../db'
 import { thumb } from '../yt'
 import { go } from '../App'
-import { fmtDur, getStats, Stats } from '../stats'
+import { fmtDur, getGoal, getStats, Stats } from '../stats'
 
 interface Item { s: Song; learned: number; total: number; timed: boolean }
 
 export default function Home() {
   const [items, setItems] = useState<Item[] | null>(null)
   const [st, setSt] = useState<Stats>()
+  const [help, setHelp] = useState(false)
+  const goal = getGoal()
   const load = async () => {
     getStats().then(setSt)
     const songs = (await db.songs.toArray()).filter(s => !s.deletedAt).sort((a, b) => b.updatedAt - a.updatedAt)
@@ -29,6 +31,9 @@ export default function Home() {
     const now = Date.now()
     await db.songs.update(s.id, { deletedAt: now, updatedAt: now })
     await db.lines.where('songId').equals(s.id).modify({ deletedAt: now, updatedAt: now })
+    // dọn bản thu (đánh dấu xoá để đồng bộ) và xoá hẳn video biểu diễn cho nhẹ máy
+    await db.recordings.where('songId').equals(s.id).modify({ deletedAt: now, updatedAt: now })
+    await db.performances.where('songId').equals(s.id).delete()
     load()
   }
 
@@ -36,6 +41,7 @@ export default function Home() {
     <div className="wrap">
       <div className="bar">
         <h1>🎵 Nốt Nhạc Nhỏ</h1>
+        <button onClick={() => setHelp(!help)}>❓</button>
         <button onClick={() => go('/bo')}>👨 Bố</button>
         <button className="primary big" onClick={() => go('/add')}>+ Thêm bài</button>
       </div>
@@ -47,7 +53,21 @@ export default function Home() {
           {st.badges.map(b => <span key={b.name} className={'badge' + (b.got ? ' got' : '')} title={b.name}>{b.icon}<small>{b.name}</small></span>)}
         </div>
       </div>}
-      {items && items.length === 0 && <p className="note">Chưa có bài nào. Bấm "+ Thêm bài" để bắt đầu nhé!</p>}
+      {st && <div className="goal">
+        <span>🎯 Hôm nay: {fmtDur(st.secToday)} / {goal} phút</span>
+        <div className="goal-bar"><i style={{ width: Math.min(100, st.secToday / (goal * 60) * 100) + '%' }} /></div>
+        {st.secToday >= goal * 60 && <b>🎉 Đạt mục tiêu rồi!</b>}
+      </div>}
+      {(help || (items && items.length === 0)) && <div className="panel">
+        <h3>Cách học một bài mới</h3>
+        <ol className="steps">
+          <li><b>+ Thêm bài</b>: dán link YouTube, dán lời (mỗi dòng một câu).</li>
+          <li><b>⏱ Chia câu</b>: cho video chạy, mỗi khi ca sĩ bắt đầu hát câu được tô hồng thì bấm nút to.</li>
+          <li><b>🎤 Học</b>: chạm câu để nghe lại, chọn số lần lặp, Lặp A-B, 🐢 chậm, 🎙️ thu giọng.</li>
+          <li><b>👩‍🏫 Cô giáo</b>: cô dạy từng câu 4 bước, thuộc câu nào được ⭐ câu đó.</li>
+          <li><b>🎬 Biểu diễn</b> hoặc <b>📺 TV</b> khi đã thuộc cả bài!</li>
+        </ol>
+      </div>}
       <div className="songs">
         {items?.map(({ s, learned, total, timed }) => (
           <div className="card" key={s.id}>

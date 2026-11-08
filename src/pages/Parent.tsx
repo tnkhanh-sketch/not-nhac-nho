@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { db, Line, Rec, Song } from '../db'
-import { fmtDur, getStats, Stats } from '../stats'
+import { fmtDur, getGoal, getStats, setGoal, Stats } from '../stats'
 import { go } from '../App'
 import SyncPanel from './SyncPanel'
 import BackupPanel from './BackupPanel'
@@ -42,6 +42,7 @@ export default function Parent() {
   const [st, setSt] = useState<Stats>()
   const [rows, setRows] = useState<SongRow[]>([])
   const [open, setOpen] = useState<string | null>(null)
+  const [goal, setGoalS] = useState(getGoal())
   const [playing, setPlaying] = useState<HTMLAudioElement | null>(null)
 
   const load = async () => {
@@ -94,6 +95,10 @@ export default function Parent() {
           <div className="stat"><b>🎙️ {st.records}</b><span>lần thu âm</span></div>
         </div>
         <div className="panel">
+          <h3>🎯 Mục tiêu mỗi ngày</h3>
+          <div className="row" style={{ marginBottom: 12 }}>
+            {[5, 10, 15, 20, 30, 45].map(m => <button key={m} className={goal === m ? 'on' : ''} onClick={() => { setGoal(m); setGoalS(m) }}>{m} phút</button>)}
+          </div>
           <h3>Số phút tập 7 ngày qua</h3>
           <div className="bars">
             {st.perDay.map(d => <div key={d.day}><span>{d.minutes}</span><i style={{ height: (d.minutes / max * 80) + '%' }} />{fmtDay(d.day)}</div>)}

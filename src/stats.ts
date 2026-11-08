@@ -59,3 +59,7 @@ export function fmtDur(sec: number) {
   const m = Math.round(sec / 60)
   return m < 60 ? `${m} phút` : `${Math.floor(m / 60)} giờ ${m % 60} phút`
 }
+
+/** Mục tiêu phút tập mỗi ngày (bố đặt trong 👨 Bố) */
+export const getGoal = () => { try { return Number(localStorage.getItem('dailyGoalMin')) || 10 } catch { return 10 } }
+export const setGoal = (m: number) => { try { localStorage.setItem('dailyGoalMin', String(m)) } catch { /* */ } }
