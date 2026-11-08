@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { db, getLines, patchLine, Line, Song } from '../db'
 import { Player, PlayerApi } from '../Player'
 import { go } from '../App'
+import { centerInParent } from '../scroll'
 
 interface Seg { start: number; end: number; reps: () => number; onDone: () => void }
 const GAP = 1500
@@ -45,7 +46,7 @@ export default function Learn({ songId, teach = false }: { songId: string; teach
       if (teach) { const f = t.findIndex(l => !l.learned); setIdx(f < 0 ? 0 : f) }
     })
   }, [songId])
-  useEffect(() => { curRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }) }, [idx])
+  useEffect(() => { centerInParent(curRef.current) }, [idx])
 
   const clearWait = () => { clearTimeout(timer.current); waiting.current = false }
   const wait = (fn: () => void) => { clearWait(); waiting.current = true; timer.current = window.setTimeout(() => { waiting.current = false; fn() }, GAP) }

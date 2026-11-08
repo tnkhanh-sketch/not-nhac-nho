@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { db, getLines, patchLine, Line, Song } from '../db'
 import { Player, PlayerApi } from '../Player'
 import { go } from '../App'
+import { centerInParent } from '../scroll'
 
 const REACT = 0.2
 
@@ -17,7 +18,7 @@ export default function Mark({ songId }: { songId: string }) {
   const curRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { db.songs.get(songId).then(setSong); getLines(songId).then(setLines) }, [songId])
-  useEffect(() => { curRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }) }, [taps.length])
+  useEffect(() => { centerInParent(curRef.current) }, [taps.length])
 
   const n = lines.length
   const done = n > 0 && taps.length > n
