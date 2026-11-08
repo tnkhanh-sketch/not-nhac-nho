@@ -35,4 +35,4 @@ export function startRec(s: MediaStream): { stop: () => Promise<Recording> } {
   }
 }
 
-export const canRecord = () => !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder)
+export const canRecord = () => !!navigator.mediaDevices && 'getUserMedia' in navigator.mediaDevices && 'MediaRecorder' in window
